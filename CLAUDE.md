@@ -142,8 +142,8 @@ total_load_kW = base_load_kW + ev_load_kW
 total_load_% = (total_load_kW ÷ transformer_kW) × 100
 
 // ตรวจสถานะ
-if total_load_% > 90 → OVERLOAD
-if total_load_% > 80 → WARNING
+if total_load_% > 80 → OVERLOAD
+if total_load_% > 70 → WARNING
 else → NORMAL
 ```
 
@@ -387,3 +387,61 @@ Step 8: Arduino (ถ้าเวลาพอ)
 - Backend ก่อน Frontend → logic ถูกต้องก่อน แล้วค่อยทำ UI ครอบ
 - Dashboard ก่อน Config Page → ดูว่า output ถูกไหมได้เร็ว
 - Google Sheets ทีหลังสุด → พัฒนาได้ offline ไม่ติด dependency ภายนอก
+
+---
+
+## 14. สถานะปัจจุบัน (Current Progress)
+
+### ✅ Step ที่เสร็จแล้ว
+
+**Step 1: Setup โปรเจค + Express Server**
+- ใช้ ES Module (`import/export`) ตลอดทั้งโปรเจค — ตั้งใน `package.json` ด้วย `"type": "module"`
+- `app.js` = ตั้งค่า Express + socket.io + middleware + routes
+- `server.js` = รับค่า port จาก config แล้วเปิด server
+- `config/index.js` = อ่าน `.env` มาเป็น object ใช้ทั่วโปรเจค
+- ทดสอบผ่าน: `GET /api/health` → `{"status":"ok"}`
+
+**Step 2: Local CSV + อ่านข้อมูล**
+- สร้าง `data/generate-csv.js` → run ครั้งเดียวสร้างไฟล์ 288 records
+- สร้าง `data/ev_charging.csv` → ข้อมูลจำลอง 24 ชม. ครอบ 3 สถานะ (NORMAL/WARNING/OVERLOAD)
+- สร้าง `csv.service.js` → อ่านไฟล์ + parse เป็น array of objects
+- สร้าง `simulation.controller.js` + `simulation.routes.js` + `routes/index.js`
+- ทดสอบผ่าน: `GET /api/simulation/csv` → JSON 288 records
+
+**Step 3: Calculation Logic**
+- สร้าง `calculation.service.js` → คำนวณ load/overload/PWM ครบ
+- รับ `record` (1 แถวจาก CSV) + `config` (ค่าหม้อแปลง) → return ผลคำนวณทั้งหมด
+- รองรับตู้ทุกขนาดแบบ dynamic (วนหา key ที่ขึ้นต้นด้วย `active_`)
+- **เกณฑ์สถานะที่ตกลงกัน:** >80% = OVERLOAD, >70% = WARNING, อื่นๆ = NORMAL
+
+**การเปลี่ยนแปลงอื่นๆ ระหว่างพัฒนา:**
+- เพิ่ม `morgan('dev')` ใน `app.js` → log HTTP request ใน terminal
+- เพิ่มเวลาใน `server.js` → แสดงเวลาตอน server start `[วันที่ เวลา] Server running...`
+- ติดตั้ง `morgan` เพิ่มใน package.json
+
+### ⬜ Step ที่ยังไม่ได้ทำ
+```
+Step 4: WebSocket ส่งข้อมูล real-time
+Step 5: Dashboard (แสดงผล)
+Step 6: Config Page (ตั้งค่า + เขียน CSV)
+Step 7: เชื่อม Google Sheets
+Step 8: Arduino (ถ้าเวลาพอ)
+```
+
+### Packages ที่ติดตั้งแล้ว
+| Package | หน้าที่ |
+|---|---|
+| `express` | web server |
+| `socket.io` | real-time WebSocket |
+| `dotenv` | อ่านค่าจาก .env |
+| `csv-parse` | parse CSV → JavaScript array |
+| `nodemon` | auto-restart เวลาแก้โค้ด (dev) |
+| `morgan` | log HTTP request ใน terminal |
+
+### คำสั่งรัน server
+```bash
+npm run p   ← รัน nodemon src/server.js
+```
+
+### GitHub Repository
+https://github.com/Pat10504/EV-Changing-Simulation.git

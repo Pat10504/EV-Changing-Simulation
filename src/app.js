@@ -1,8 +1,10 @@
 import express from 'express';
+import morgan from 'morgan';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -11,6 +13,7 @@ const httpServer = createServer(app);
 const io = new Server(httpServer);
 
 // Middleware
+app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.static(join(__dirname, 'public')));
 
