@@ -8,440 +8,259 @@
 ## 1. ภาพรวมโปรเจค
 
 ### ปัญหา
-เมื่อมีรถ EV มาชาร์จพร้อมกันมากๆ หม้อแปลงรับภาระไม่ไหว → Overload → ไฟดับ/หม้อแปลงเสียหาย
+เมื่อมีรถ EV มาชาร์จพร้อมกันมากๆ หม้อแปลงรับภาระไม่ไหว -> Overload -> ไฟดับ/หม้อแปลงเสียหาย
 
 ### วิธีแก้
 ระบบอัจฉริยะที่ตรวจจับ Overload แล้วลดกระแสชาร์จแต่ละตู้ลงอัตโนมัติ เพื่อไม่ให้เกินขีดจำกัดของหม้อแปลง
 
 ### สิ่งที่ระบบทำ
-1. ผู้ใช้ตั้งค่าตู้ชาร์จ (จำนวน, ขนาด, ช่วงเวลาใช้งาน) ผ่าน frontend → save ลง CSV บน Google Sheets
-2. Dashboard อ่าน CSV ทีละ record ทุก 2 วินาที → คำนวณ load, ตรวจ overload
-3. ถ้า overload → คำนวณว่าต้องลดกระแสแต่ละตู้เท่าไหร่
-4. แสดงผลบน Dashboard + ส่ง PWM ไป Arduino จำลอง hardware
+1. ผู้ใช้อัพโหลด CSV 2 ไฟล์ (ข้อมูลตู้ชาร์จ + ข้อมูลโหลดช่วงเวลา) -> preview -> บันทึกลง Supabase
+2. Dashboard กด Play -> Backend อ่านจาก Supabase ทีละ record ทุก 2 วินาที -> คำนวณ load, ตรวจ overload
+3. ถ้า overload -> คำนวณว่าต้องลดกระแสแต่ละตู้เท่าไหร่ -> คำนวณ PWM
+4. แสดงผลบน Dashboard แบบ real-time (กราฟ + ตาราง + ค่า PWM)
+5. (Phase 2) ส่ง PWM ไป Arduino จำลอง hardware
 
 ---
 
 ## 2. Technology Stack
 
-### ตัดสินใจแล้ว
-- **Backend + Server:** Node.js / Express.js (ไม่ใช่ Python)
-- **Frontend:** HTML/CSS/JS (serve ผ่าน Express)
-- **Data Storage:** CSV บน Google Sheets (publish เป็น CSV URL)
-- **Real-time:** WebSocket (socket.io)
-- **Hardware Communication:** serialport npm package → Arduino ผ่าน USB Serial
-- **Hardware:** Arduino (ไม่ใช่ ESP32 หรือ Raspberry Pi)
-- **Deploy:** Railway หรือ Render (ส่วน web), Local (ส่วน Arduino)
-
-### ทำไมเลือก Node.js/Express แทน Python/Flask
-- เจ้าของโปรเจคกำลังเรียน Node.js/Express อยู่
-- socket.io เหมาะกับ real-time dashboard
-- serialport npm ใช้คุยกับ Arduino ได้
+| ส่วน | เลือกใช้ | npm package |
+|------|---------|-------------|
+| Runtime | Node.js / Express.js | express |
+| Frontend | HTML / CSS / JS | - |
+| กราฟ | Chart.js | chart.js (CDN) |
+| Real-time | WebSocket | socket.io (มีแล้ว) |
+| File Upload | multer | multer |
+| Database | Supabase (PostgreSQL cloud) | @supabase/supabase-js |
+| CSV Parse | csv-parse | csv-parse (มีแล้ว) |
+| Dev Tools | nodemon + morgan | (มีแล้ว) |
+| Arduino (Phase 2) | USB Serial | serialport |
 
 ---
 
-## 3. CSV Design
+## 3. CSV Design (2 ไฟล์ที่ต้อง upload)
 
-### ไฟล์เดียวบน Google Sheets
-ผู้ใช้สร้างจาก frontend ทั้งหมด ไม่ได้ generate จาก script
-
-### โครงสร้าง CSV (1 แถว = 1 time slot)
-
+### ไฟล์ 1: chargers.csv - ทะเบียนตู้ชาร์จ
 ```csv
-time, active_50kW, active_150kW
-00:00, 10, 3
-00:05, 12, 5
-00:10, 8, 2
-...
-19:00, 200, 45
-...
-23:55, 15, 4
+charger_kW,total_units
+50,300
+150,50
 ```
 
-- **time** → เวลา HH:MM ทุก 5 นาที
-- **active_[ขนาด]kW** → จำนวนตู้ที่มีรถชาร์จ ณ เวลานั้น ของแต่ละขนาด
-- คอลัมน์จะเพิ่ม/ลดตามขนาดตู้ที่ผู้ใช้ตั้ง เช่น ถ้าเพิ่มตู้ 100kW → เพิ่มคอลัมน์ active_100kW
-- **288 records** ต่อวัน (24 ชม. × 12 records/ชม.)
-- backend อ่าน **1 record ทุก 2 วินาที** → demo ยาว ~10 นาที
+### ไฟล์ 2: load_pattern.csv - ข้อมูลจำลอง 24 ชม.
+```csv
+time,base_load_percent,active_50kW,active_150kW
+00:00,35,10,3
+00:05,34,12,5
+06:00,55,45,10
+12:00,60,135,30
+18:00,75,200,45
+23:55,40,15,4
+```
 
-### การจัดการ CSV
-- **เพิ่ม:** ผู้ใช้ตั้งค่าบน frontend → กด Save → insert records ลง CSV
-- **ลบ/ล้าง:** ผู้ใช้กด Clear → ล้าง CSV ทั้งไฟล์
-- **แก้ไข:** ตั้งค่าใหม่ → ล้างของเก่า → save ใหม่
-- **Fallback:** ถ้า fetch Google Sheets ไม่ได้ → อ่าน local CSV แทน
+- time -> เวลา HH:MM ทุก 5 นาที (288 records ต่อวัน)
+- base_load_percent -> ภาระพื้นฐาน (%) เปลี่ยนตามเวลา (กลางคืน 30-40%, เย็น 70-80%)
+- active_[ขนาด]kW -> จำนวนตู้ที่มีรถชาร์จ ณ เวลานั้น
+- Backend อ่าน 1 record ทุก 2 วินาที -> demo ยาว ~10 นาที
 
 ---
 
-## 4. Frontend (2 หน้า)
+## 4. Database (Supabase)
 
-### หน้าที่ 1: ตั้งค่า (Configuration Page)
+### Table: chargers
+| column | type | description |
+|--------|------|-------------|
+| id | serial PK | auto |
+| charger_kw | integer | ขนาดตู้ kW |
+| total_units | integer | จำนวนตู้ |
+| uploaded_at | timestamp | เวลา upload |
+
+### Table: load_patterns
+| column | type | description |
+|--------|------|-------------|
+| id | serial PK | auto |
+| time_slot | varchar | เวลา HH:MM |
+| base_load_percent | decimal | ภาระพื้นฐาน % |
+| charger_data | jsonb | {"active_50kW": 200, "active_150kW": 45} |
+| uploaded_at | timestamp | เวลา upload |
+
+### Flow
+Upload CSV -> Node.js parse -> ล้างข้อมูลเก่า -> INSERT ลง Supabase
+Dashboard กด Play -> SELECT ทีละ record ORDER BY time_slot
+
+---
+
+## 5. Frontend (2 หน้า)
+
+### หน้าที่ 1: Upload CSV + ตั้งค่า
 
 **ส่วนตั้งค่าหม้อแปลง:**
-- พิกัดหม้อแปลง (MVA) → default 50 MVA
-- ภาระพื้นฐาน (%) → default 65% (ปรับได้ เช่น 50-70%)
-- ขีดจำกัด (%) → default 80%
+- พิกัดหม้อแปลง (MVA) -> default 50 MVA (ปรับได้)
+- ขีดจำกัด (%) -> default 80% (ปรับได้)
 
-**ส่วนจัดการตู้ชาร์จ:**
-- เพิ่มตู้: เลือกขนาด (dropdown: 50 / 100 / 120 / 150 / 200 kW) + จำนวนตู้
-- ขนาดตู้ DC Fast Charger ที่มีจริงในไทย: 25, 50, 100, 120, 150, 180, 200 kW
-- แสดงรายการตู้ที่เพิ่มแล้ว ลบได้
+**ส่วน Upload:**
+- Upload chargers.csv -> แสดง preview ตาราง (column + ข้อมูล)
+- Upload load_pattern.csv -> แสดง preview ตาราง (column + ข้อมูล)
+- กด Confirm -> parse + INSERT ลง Supabase
+- กด Clear -> ล้างข้อมูลใน Supabase
 
-**ส่วนตั้งค่า usage pattern:**
-- ตั้งเป็นช่วง เช่น "50kW ช่วง 18:00-21:00 ใช้ 200 ตู้จาก 300 ตู้"
-- ระบบ generate records ทุก 5 นาทีให้อัตโนมัติ
-- ต้องตั้งให้ครบ 24 ชม. (288 records) ก่อน save
+**Design:** สวย เรียบง่าย ใช้งานง่าย
 
-**ปุ่ม:**
-- Save → บันทึกลง CSV บน Google Sheets
-- Clear → ล้าง CSV
-- ไปหน้า Dashboard
-
-### หน้าที่ 2: Dashboard (Simulation Page)
+### หน้าที่ 2: Dashboard (หน้าหลัก)
 
 **ค่าที่แสดง:**
-- เวลาปัจจุบัน (จาก CSV)
-- ภาระพื้นฐาน (kW)
+- เวลาปัจจุบัน (จาก record)
+- ภาระพื้นฐาน (kW, %)
 - ภาระ EV รวม (kW) แยกตามขนาดตู้
-- ภาระรวมทั้งหมด (kW และ %)
+- ภาระรวมทั้งหมด (kW, %)
 - สถานะ: NORMAL (เขียว) / WARNING (เหลือง) / OVERLOAD (แดง)
-- กำลังที่เกินขีดจำกัด (kW) ถ้า overload
+- กำลังที่เกิน (kW) ถ้า overload
 - กำลังที่ถูกลดต่อตู้ (kW) ถ้า overload
-- ค่า PWM ที่ส่งไป Arduino
 
-**กราฟ:**
-- กราฟภาระรวมตลอด 24 ชม. (แสดงเส้นขีดจำกัด 80%)
-- เส้นแสดงตำแหน่งปัจจุบัน
+**ตารางตู้ชาร์จ (รายประเภท):**
+- แต่ละขนาด: เช่น 50kW ใช้ 200/300 ตู้, 150kW ใช้ 45/50 ตู้
+- กำลังเต็ม / กำลังที่ถูกลด
+- Design สวย ดูง่าย
+
+**ค่า PWM (แสดงบนเว็บ):**
+- PWM (0-255), แรงดันจำลอง (0-5V), กำลังจำลอง (kW)
+- แสดงเป็น gauge หรือ bar
+
+**กราฟ (Chart.js):**
+- กราฟภาระรวม 24 ชม. + เส้นขีดจำกัด 80% + ตำแหน่งปัจจุบัน
+- กราฟกำลังไฟฟ้า (kW) / กระแส (A) / แรงดัน (V)
 
 **ควบคุม:**
-- ปุ่ม Play / Pause / Reset
-- ปรับความเร็ว: 1x (2 วิ) / 2x (1 วิ) / 5x (0.4 วิ)
-- Skip ไปช่วง Peak ได้
+- Play / Pause / Reset
+- ความเร็ว: 1x (2 วิ) / 2x (1 วิ) / 5x (0.4 วิ)
 
 ---
 
-## 5. Backend Logic (Node.js/Express)
-
-### การอ่าน CSV
-```
-ทุก 2 วินาที:
-1. อ่าน 1 record จาก CSV (1 แถว = 1 time slot)
-2. แยกค่า active ของแต่ละขนาดตู้
-```
+## 6. Backend Logic
 
 ### การคำนวณ (ทุก record)
 ```
-// ค่าจาก frontend config
-transformer_kW = transformer_MVA × 1000        // เช่น 50 × 1000 = 50,000 kW
-base_load_kW = transformer_kW × base_load_%    // เช่น 50,000 × 0.65 = 32,500 kW
-load_limit_kW = transformer_kW × limit_%       // เช่น 50,000 × 0.80 = 40,000 kW
-
-// คำนวณจาก CSV record
-ev_load_kW = sum(active_[size] × size) สำหรับทุกขนาดตู้
-// เช่น (200 × 50) + (45 × 150) = 10,000 + 6,750 = 16,750 kW
-
+transformer_kW = transformer_MVA x 1000
+base_load_kW = transformer_kW x (base_load_percent / 100)
+load_limit_kW = transformer_kW x (limit_percent / 100)
+ev_load_kW = sum(active_[size] x size) ทุกขนาด
 total_load_kW = base_load_kW + ev_load_kW
-total_load_% = (total_load_kW ÷ transformer_kW) × 100
+total_load_percent = (total_load_kW / transformer_kW) x 100
 
-// ตรวจสถานะ
-if total_load_% > 80 → OVERLOAD
-if total_load_% > 70 → WARNING
-else → NORMAL
+if total_load_percent > 80 -> OVERLOAD
+if total_load_percent > 70 -> WARNING
+else -> NORMAL
 ```
 
-### การคำนวณเมื่อ Overload
+### เมื่อ Overload
 ```
 over_limit_kW = total_load_kW - load_limit_kW
-total_active = sum(active ทุกขนาด)
-reduce_per_charger_kW = over_limit_kW ÷ total_active
-
-// สำหรับแต่ละขนาดตู้
-new_power_kW = original_power_kW - reduce_per_charger_kW
-new_power_% = (new_power_kW ÷ original_power_kW) × 100
+reduce_per_charger = over_limit_kW / total_active_chargers
+new_power = original_power - reduce_per_charger
 ```
 
-### การคำนวณ PWM (สำหรับ Arduino จำลอง 1 ตู้)
+### คำนวณ PWM
 ```
-// สมมติจำลองตู้ 50 kW
-if NORMAL:
-    pwm = 255                        // เต็มที่
-else if OVERLOAD:
-    pwm = (new_power_kW ÷ 50) × 255 // ลดลงตามสัดส่วน
-
-voltage = (pwm ÷ 255) × 5V          // แรงดันจำลอง
-watt_sim = (pwm ÷ 255) × 50kW       // กำลังจำลอง
-```
-
-### การส่ง PWM ไป Arduino
-```javascript
-const { SerialPort } = require('serialport');
-const port = new SerialPort({ path: 'COM3', baudRate: 9600 }); // หรือ /dev/ttyUSB0 บน Mac
-
-// ส่งค่า PWM
-port.write(`${pwm}\n`);
+pwm = (new_power / original_power) x 255
+voltage = (pwm / 255) x 5V
+watt_sim = (pwm / 255) x original_power_kW
 ```
 
 ---
 
-## 6. Arduino Code (รับ PWM แสดงผล)
-
-```cpp
-int ledPin = 9;  // PWM pin
-
-void setup() {
-    Serial.begin(9600);
-    pinMode(ledPin, OUTPUT);
-}
-
-void loop() {
-    if (Serial.available() > 0) {
-        int pwm = Serial.parseInt();
-        analogWrite(ledPin, pwm);     // LED แสดงสัดส่วนกำลัง
-    }
-}
-```
-
-### การเทียบสัดส่วน (Down Scale)
-```
-ระบบจริง          สัดส่วน    Arduino จำลอง
-50 kW (100%)  →   100%   →   5V / PWM 255
-31.5 kW (63%) →   63%    →   3.15V / PWM 161
-25 kW (50%)   →   50%    →   2.5V / PWM 128
-```
-
----
-
-## 7. Google Sheets Setup
-
-### วิธีใช้
-1. สร้าง Google Sheets
-2. File → Share → Publish to web → เลือก CSV → ได้ URL
-3. Node.js fetch URL นั้นตรงๆ
-
-### Fallback
-ถ้า internet มีปัญหา → อ่าน local CSV ใน /data/ folder แทนอัตโนมัติ
-
----
-
-## 8. Deploy Plan
-
-```
-Cloud (Railway/Render):          เครื่อง Local (ตอน demo):
-├── Node.js/Express              ├── Node.js script
-├── อ่าน Google Sheets CSV       ├── ดึงข้อมูลจาก server
-├── คำนวณ load/overload          ├── ส่ง PWM ผ่าน Serial
-├── API + WebSocket              └── Arduino รับ → LED
-└── Dashboard หน้าเว็บ
-    ↓
-เปิดดูผ่าน URL ได้
-```
-
----
-
-## 9. โครงสร้างโฟลเดอร์ (เบื้องต้น)
-
+## 7. โครงสร้างโฟลเดอร์
 ```
 ev-charging-simulation/
-├── BRIEF.md                    ← ไฟล์นี้
+├── CLAUDE.md
 ├── package.json
-├── .env                        ← Google Sheets URL, Serial port
-├── src/
-│   ├── app.js                  ← Express server หลัก
-│   ├── routes/
-│   │   ├── config.js           ← API สำหรับหน้าตั้งค่า
-│   │   └── dashboard.js        ← API สำหรับ dashboard
-│   ├── services/
-│   │   ├── csvService.js       ← อ่าน/เขียน CSV (Google Sheets + local fallback)
-│   │   ├── calculationService.js ← คำนวณ load, overload, PWM
-│   │   └── serialService.js    ← คุยกับ Arduino ผ่าน Serial
-│   └── public/
-│       ├── index.html          ← หน้าตั้งค่า
-│       ├── dashboard.html      ← หน้า Dashboard
-│       ├── css/
-│       └── js/
-├── data/
-│   └── ev_charging_backup.csv  ← local CSV fallback
-└── arduino/
-    └── ev_pwm_controller.ino   ← Arduino sketch
-```
-
----
-
-## 10. ลำดับการทำงาน (Priority)
-
-1. **ตั้ง Google Sheets + CSV structure** → ทดสอบ fetch ได้
-2. **หน้าตั้งค่า** → เพิ่มตู้, ตั้ง pattern, save ลง CSV
-3. **Backend calculation** → อ่าน CSV, คำนวณ load/overload
-4. **Dashboard** → แสดงผล real-time ด้วย WebSocket
-5. **Arduino Serial** → ส่ง PWM จำลอง hardware
-6. **Deploy** → ขึ้น Railway/Render
-
----
-
-## 11. ข้อมูลอ้างอิง
-
-### ขนาดตู้ DC Fast Charger ที่มีจริงในไทย
-- Delta: 25, 50, 100, 150, 200 kW
-- Teison: 30, 120 kW
-- Wallbox Supernova: 60-150 kW
-- EA Anywhere / Shell: 180 kW
-- ต่างประเทศ: สูงสุด 350 kW (Electrify America Hyper-Fast)
-
-### หม้อแปลง
-- โปรเจคนี้ใช้ 50 MVA = 50,000 kW
-- ขีดจำกัด default 80% = 40,000 kW
-- ภาระพื้นฐาน default 65% = 32,500 kW (บ้าน, โรงงาน, อื่นๆ ในพื้นที่)
-
-### PWM
-- Arduino 8-bit: 0-255
-- 0 = ปิด, 255 = เต็มที่
-- แรงดัน output: 0-5V
-- สูตร: PWM = (กำลังใหม่ ÷ กำลังเต็ม) × 255
-
----
-
-## 12. หมายเหตุสำคัญ
-
-- **โปรเจคนี้เจ้าของสั่ง AI ทำเป็นหลัก** ไม่ต้องสอน syntax ทีละบรรทัด แต่อธิบายสั้นๆ ว่าแต่ละส่วนทำอะไร ทำไม พอ present ได้
-- **เจ้าของโปรเจคมีพื้นฐาน:** BA ทำ web systems ให้หน่วยงานรัฐ, เขียน SQL, กำลังเรียน Node.js/Express, มีพื้นฐาน Arduino
-- **ต้องมี deadline ส่ง** → เน้นทำให้เสร็จ ไม่ต้อง perfect
-- **ถ้าไม่แน่ใจอะไร ให้ถามก่อนทำ**
-
----
-
-## 13. ข้อตกลงการทำงานร่วมกัน (Working Agreement)
-
-### แนวทาง
-- ทำทีละ step เล็กๆ ไม่กระโดด
-- อธิบายสั้นๆ ว่าโค้ดทำอะไร ทำไม — ไม่สอน syntax ทีละบรรทัด
-- ทำเสร็จแต่ละ step → ทดสอบให้ผ่านก่อน → ค่อยไปต่อ
-- ถ้าไม่แน่ใจ ถามก่อนทำเสมอ
-- **ทุกครั้งที่คุยและตกลงอะไรกันได้ → เพิ่มลงใน CLAUDE.md เพื่อให้ session ใหม่ทำต่อได้**
-
-### โครงสร้างโฟลเดอร์ที่ตกลงกัน
-
-```
-ev-charging-simulation/
-├── package.json
-├── .env                              ← SHEETS_URL, SERIAL_PORT
+├── .env                              ← SUPABASE_URL, SUPABASE_KEY
 ├── .gitignore
-│
 ├── src/
 │   ├── app.js                        ← Express + socket.io setup
 │   ├── server.js                     ← เปิด port, start server
-│   │
 │   ├── routes/
-│   │   ├── index.js                  ← รวม routes ทั้งหมด
-│   │   ├── config.routes.js
+│   │   ├── index.js
+│   │   ├── upload.routes.js
 │   │   └── simulation.routes.js
-│   │
 │   ├── controllers/
-│   │   ├── config.controller.js      ← รับ req/res, เรียก service
+│   │   ├── upload.controller.js
 │   │   └── simulation.controller.js
-│   │
 │   ├── services/
-│   │   ├── csv.service.js            ← อ่าน/เขียน CSV (local + Google Sheets fallback)
-│   │   ├── calculation.service.js    ← คำนวณ load, overload, PWM
-│   │   ├── simulation.service.js     ← loop ทุก 2 วิ, ส่งผ่าน WebSocket
-│   │   └── serial.service.js         ← ส่ง PWM ไป Arduino
-│   │
+│   │   ├── db.service.js             ← Supabase client + CRUD
+│   │   ├── csv.service.js
+│   │   ├── calculation.service.js
+│   │   └── simulation.service.js
 │   ├── middleware/
-│   │   ├── errorHandler.js           ← จับ error ทุกตัวไว้ที่เดียว
-│   │   └── validate.js               ← ตรวจ input ก่อนเข้า controller
-│   │
+│   │   ├── errorHandler.js
+│   │   └── validate.js
 │   ├── config/
-│   │   └── index.js                  ← อ่านค่า .env มาใช้
-│   │
+│   │   └── index.js
 │   └── public/
-│       ├── index.html                ← หน้าตั้งค่า
-│       ├── dashboard.html            ← หน้า Dashboard
-│       ├── css/
+│       ├── upload.html
+│       ├── dashboard.html
+│       ├── css/style.css
 │       └── js/
-│           ├── config.js
+│           ├── upload.js
 │           └── dashboard.js
-│
 ├── data/
-│   └── ev_charging.csv               ← local CSV (ใช้พัฒนา + fallback)
-│
-└── arduino/
+│   ├── sample_chargers.csv
+│   └── sample_load_pattern.csv
+└── arduino/                          ← Phase 2
     └── ev_pwm_controller.ino
 ```
 
-**ความแตกต่าง routes vs controllers vs services:**
-- `routes/` = รับ HTTP request, ชี้ไป controller
-- `controllers/` = รับ req/res, เรียก service, ส่ง response
-- `services/` = business logic ล้วนๆ ไม่รู้จัก req/res
+---
 
-### ลำดับ Step การพัฒนา (ตกลงแล้ว)
+## 8. ลำดับการทำงาน
 
+### Phase 1: Software + แสดง PWM บนเว็บ
 ```
-Step 1: Setup โปรเจค + Express server เปล่าๆ ทำงานได้
-Step 2: Local CSV + อ่านข้อมูลได้
-Step 3: Calculation logic (load/overload/PWM)
-Step 4: WebSocket ส่งข้อมูล real-time
-Step 5: Dashboard (แสดงผล)
-Step 6: Config Page (ตั้งค่า + เขียน CSV)
-Step 7: เชื่อม Google Sheets
-Step 8: Arduino (ถ้าเวลาพอ)
+Step 1: ✅ Setup โปรเจค + Express server
+Step 2: ✅ Local CSV + อ่านข้อมูลได้
+Step 3: ✅ Calculation logic
+Step 4: Setup Supabase + สร้าง tables
+Step 5: หน้า Upload CSV (upload -> preview -> save ลง Supabase)
+Step 6: WebSocket ส่งข้อมูล real-time
+Step 7: Dashboard แสดงผล (กราฟ + ตาราง + ค่า PWM)
+Step 8: Deploy (Railway/Render)
 ```
 
-### เหตุผลลำดับนี้
-- Backend ก่อน Frontend → logic ถูกต้องก่อน แล้วค่อยทำ UI ครอบ
-- Dashboard ก่อน Config Page → ดูว่า output ถูกไหมได้เร็ว
-- Google Sheets ทีหลังสุด → พัฒนาได้ offline ไม่ติด dependency ภายนอก
+### Phase 2: Hardware (ทำทีหลัง)
+```
+Step 9: Arduino sketch รับ PWM
+Step 10: เชื่อม Node.js -> serialport -> Arduino
+Step 11: ออกแบบ hardware (LED Bar, OLED, ฯลฯ)
+```
 
 ---
 
-## 14. สถานะปัจจุบัน (Current Progress)
+## 9. สถานะปัจจุบัน
 
-### ✅ Step ที่เสร็จแล้ว
+### ✅ เสร็จแล้ว
+- ES Module ตลอดทั้งโปรเจค ("type": "module")
+- Express + socket.io + middleware + routes
+- config/index.js อ่าน .env
+- csv.service.js อ่าน CSV + parse
+- calculation.service.js คำนวณ load/overload/PWM (dynamic ทุกขนาดตู้)
+- เกณฑ์: >80% = OVERLOAD, >70% = WARNING
+- Packages: express, socket.io, dotenv, csv-parse, nodemon, morgan
+- คำสั่งรัน: npm run p
 
-**Step 1: Setup โปรเจค + Express Server**
-- ใช้ ES Module (`import/export`) ตลอดทั้งโปรเจค — ตั้งใน `package.json` ด้วย `"type": "module"`
-- `app.js` = ตั้งค่า Express + socket.io + middleware + routes
-- `server.js` = รับค่า port จาก config แล้วเปิด server
-- `config/index.js` = อ่าน `.env` มาเป็น object ใช้ทั่วโปรเจค
-- ทดสอบผ่าน: `GET /api/health` → `{"status":"ok"}`
+### ⬜ ต้องทำต่อ
+Step 4-8 (Phase 1)
 
-**Step 2: Local CSV + อ่านข้อมูล**
-- สร้าง `data/generate-csv.js` → run ครั้งเดียวสร้างไฟล์ 288 records
-- สร้าง `data/ev_charging.csv` → ข้อมูลจำลอง 24 ชม. ครอบ 3 สถานะ (NORMAL/WARNING/OVERLOAD)
-- สร้าง `csv.service.js` → อ่านไฟล์ + parse เป็น array of objects
-- สร้าง `simulation.controller.js` + `simulation.routes.js` + `routes/index.js`
-- ทดสอบผ่าน: `GET /api/simulation/csv` → JSON 288 records
+---
 
-**Step 3: Calculation Logic**
-- สร้าง `calculation.service.js` → คำนวณ load/overload/PWM ครบ
-- รับ `record` (1 แถวจาก CSV) + `config` (ค่าหม้อแปลง) → return ผลคำนวณทั้งหมด
-- รองรับตู้ทุกขนาดแบบ dynamic (วนหา key ที่ขึ้นต้นด้วย `active_`)
-- **เกณฑ์สถานะที่ตกลงกัน:** >80% = OVERLOAD, >70% = WARNING, อื่นๆ = NORMAL
+## 10. ข้อตกลงการทำงานร่วมกัน
+- ทำทีละ step ไม่กระโดด
+- อธิบายสั้นๆ ว่าโค้ดทำอะไร ทำไม
+- ทำเสร็จ -> ทดสอบ -> ไปต่อ
+- ไม่แน่ใจ -> ถามก่อน
+- ตกลงอะไรได้ -> เพิ่มลง CLAUDE.md
+- เจ้าของสั่ง AI ทำเป็นหลัก เน้นเสร็จทัน deadline
+- Frontend ให้ออกแบบสวย ดู professional
 
-**การเปลี่ยนแปลงอื่นๆ ระหว่างพัฒนา:**
-- เพิ่ม `morgan('dev')` ใน `app.js` → log HTTP request ใน terminal
-- เพิ่มเวลาใน `server.js` → แสดงเวลาตอน server start `[วันที่ เวลา] Server running...`
-- ติดตั้ง `morgan` เพิ่มใน package.json
+---
 
-### ⬜ Step ที่ยังไม่ได้ทำ
-```
-Step 4: WebSocket ส่งข้อมูล real-time
-Step 5: Dashboard (แสดงผล)
-Step 6: Config Page (ตั้งค่า + เขียน CSV)
-Step 7: เชื่อม Google Sheets
-Step 8: Arduino (ถ้าเวลาพอ)
-```
-
-### Packages ที่ติดตั้งแล้ว
-| Package | หน้าที่ |
-|---|---|
-| `express` | web server |
-| `socket.io` | real-time WebSocket |
-| `dotenv` | อ่านค่าจาก .env |
-| `csv-parse` | parse CSV → JavaScript array |
-| `nodemon` | auto-restart เวลาแก้โค้ด (dev) |
-| `morgan` | log HTTP request ใน terminal |
-
-### คำสั่งรัน server
-```bash
-npm run p   ← รัน nodemon src/server.js
-```
-
-### GitHub Repository
+## 11. GitHub Repository
 https://github.com/Pat10504/EV-Changing-Simulation.git
