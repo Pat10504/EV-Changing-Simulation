@@ -1,33 +1,39 @@
-// ค่า default หม้อแปลง (ถ้า frontend ยังไม่ส่งค่ามา)
+import { CSV_FIELDS } from '../config/constants.js'
+import { calculatePwmSignal } from './pwm.service.js'
+
 const DEFAULT_CONFIG = {
   transformer_mva: 50,
-  base_load_percent: 65,
   limit_percent: 80,
 }
 
 export function calculate(record, config = DEFAULT_CONFIG) {
-  const { transformer_mva, base_load_percent, limit_percent } = config
+  const transformer_mva = Number(config.transformer_mva ?? DEFAULT_CONFIG.transformer_mva)
+  const limit_percent = Number(config.limit_percent ?? DEFAULT_CONFIG.limit_percent)
+  const base_load_percent = Number(record.base_load_percent ?? config.base_load_percent ?? 65)
 
   // --- ค่าหม้อแปลง ---
   const transformer_kW = transformer_mva * 1000
   const base_load_kW = transformer_kW * (base_load_percent / 100)
   const load_limit_kW = transformer_kW * (limit_percent / 100)
 
-  // --- คำนวณ EV load จาก CSV record ---
-  // record มีรูปแบบ: { time: '18:00', active_50kW: 200, active_150kW: 45 }
-  // วนหา key ที่ขึ้นต้นด้วย active_ แล้วคูณจำนวนตู้กับขนาด
   let ev_load_kW = 0
   const charger_breakdown = {}
+  const activeData = record.charger_data ?? record
 
-  for (const [key, value] of Object.entries(record)) {
-    if (key.startsWith('active_')) {
-      const size = parseInt(key.replace('active_', '').replace('kW', ''))
-      const load = value * size
+  for (const [key, value] of Object.entries(activeData)) {
+    if (key.startsWith(CSV_FIELDS.activePrefix)) {
+      const size = parseInt(key.replace(CSV_FIELDS.activePrefix, '').replace('kW', ''))
+      const active = Number(value || 0)
+      const totalUnits = getTotalUnits(size, config.chargers)
+      const load = active * size
       ev_load_kW += load
       charger_breakdown[key] = { 
-        active: value, 
+        active,
+        total_units: totalUnits,
         size_kW: size, 
-        load_kW: load }
+        load_kW: load,
+        utilization_percent: totalUnits > 0 ? round((active / totalUnits) * 100) : 0,
+      }
     }
   }
 
@@ -37,7 +43,7 @@ export function calculate(record, config = DEFAULT_CONFIG) {
 
   // --- สถานะ ---
   let status = 'NORMAL'
-  if (total_load_percent > 80) status = 'OVERLOAD'
+  if (total_load_percent > limit_percent) status = 'OVERLOAD'
   else if (total_load_percent > 70) status = 'WARNING'
 
   // --- คำนวณเมื่อ Overload ---
@@ -54,32 +60,43 @@ export function calculate(record, config = DEFAULT_CONFIG) {
       const new_power_kW = Math.max(0, c.size_kW - reduce_per_charger_kW)
       charger_adjusted[key] = {
         original_kW: c.size_kW,
-        new_power_kW: parseFloat(new_power_kW.toFixed(2)),
-        new_power_percent: parseFloat(((new_power_kW / c.size_kW) * 100).toFixed(2)),
+        new_power_kW: round(new_power_kW),
+        reduced_kW: round(c.size_kW - new_power_kW),
+        new_power_percent: round((new_power_kW / c.size_kW) * 100),
       }
     }
   }
 
-  // --- PWM (จำลองตู้ 50kW 1 ตู้) ---
-  let pwm = 255
-  if (status === 'OVERLOAD' && charger_adjusted['active_50kW']) {
-    pwm = Math.round((charger_adjusted['active_50kW'].new_power_kW / 50) * 255)
-  }
-  pwm = Math.max(0, Math.min(255, pwm))
+  const pwmSignal = calculatePwmSignal({
+    status,
+    chargerBreakdown: charger_breakdown,
+    chargerAdjusted: charger_adjusted,
+  })
 
   return {
-    time: record.time,
+    time: record.time ?? record.time_slot,
     transformer_kW,
-    base_load_kW,
+    transformer_mva,
+    base_load_percent,
+    base_load_kW: round(base_load_kW),
     load_limit_kW,
     ev_load_kW,
-    total_load_kW: parseFloat(total_load_kW.toFixed(2)),
-    total_load_percent: parseFloat(total_load_percent.toFixed(2)),
+    total_load_kW: round(total_load_kW),
+    total_load_percent: round(total_load_percent),
     status,
-    over_limit_kW: parseFloat(over_limit_kW.toFixed(2)),
-    reduce_per_charger_kW: parseFloat(reduce_per_charger_kW.toFixed(2)),
+    over_limit_kW: round(over_limit_kW),
+    reduce_per_charger_kW: round(reduce_per_charger_kW),
     charger_breakdown,
     charger_adjusted,
-    pwm,
+    ...pwmSignal,
   }
+}
+
+function getTotalUnits(size, chargers = []) {
+  const match = chargers.find((charger) => Number(charger.charger_kw) === Number(size))
+  return Number(match?.total_units || 0)
+}
+
+function round(value) {
+  return Number(Number(value || 0).toFixed(2))
 }

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard | ระบบจำลองการจัดการพลังงาน EV</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar project-header">
+      <a class="brand project-brand" href="/dashboard.html">
+        <span class="logo-frame">
+          <img class="university-logo" src="/assets/spu-logo.svg" alt="โลโก้มหาวิทยาลัยศรีปทุม">
+        </span>
+        <span class="brand-copy">
+          <span class="project-kicker">โครงงานวิศวกรรมไฟฟ้า | มหาวิทยาลัยศรีปทุม</span>
+          <h1>ระบบจำลองการจัดการพลังงานสำหรับสถานีชาร์จ EV</h1>
+          <p>ป้องกันภาระสูงสุดของหม้อแปลงไฟฟ้ากำลังด้วยการจำลอง Load Management และสัญญาณ PWM แบบ Realtime</p>
+        </span>
+      </a>
+      <nav class="nav">
+        <a class="active" href="/dashboard.html">Dashboard</a>
+        <a href="/upload.html">อัปโหลด CSV</a>
+      </nav>
+    </header>
+
+    <section class="project-credits">
+      <span><strong>นักศึกษา</strong> นายพัฏ เครือดำรงค์ 66028195 <span class="dot-separator"></span> นายสาคเรศ ลิมปิจักร์ 66036675 <span class="dot-separator"></span> นายปภาวิชญ์ ดีล้น 66072828</span>
+      <span><strong>อาจารย์ที่ปรึกษา</strong> ผู้ช่วยศาสตราจารย์ เอกชัย ดีศิริ</span>
+    </section>
+
+    <section class="controls panel flat">
+      <div class="field">
+        <label for="transformerMva">พิกัดหม้อแปลง (MVA)</label>
+        <input id="transformerMva" type="number" min="1" value="50">
+      </div>
+      <div class="field">
+        <label for="limitPercent">ขีดจำกัดโหลด (%)</label>
+        <input id="limitPercent" type="number" min="1" max="100" value="80">
+      </div>
+      <div class="field">
+        <label for="speed">ความเร็ว</label>
+        <select id="speed">
+          <option value="2000">1x / 2 วินาที</option>
+          <option value="1000">2x / 1 วินาที</option>
+          <option value="400">5x / 0.4 วินาที</option>
+        </select>
+      </div>
+      <button id="playButton" class="primary">เริ่มจำลอง</button>
+      <button id="pauseButton">หยุดชั่วคราว</button>
+      <button id="resetButton">รีเซ็ต</button>
+      <span id="connectionState" class="status-pill">กำลังเชื่อมต่อ</span>
+    </section>
+
+    <section class="grid dashboard-grid" style="margin-top: 16px;">
+      <div class="grid">
+        <section class="grid metric-grid">
+          <article class="panel metric">
+            <span class="label">ช่วงเวลา</span>
+            <strong id="timeSlot">--:--</strong>
+            <span id="recordProgress">0 / 0 records</span>
+          </article>
+          <article class="panel metric">
+            <span class="label">โหลดรวม</span>
+            <strong id="totalLoad">0 kW</strong>
+            <span id="totalPercent">0%</span>
+          </article>
+          <article class="panel metric">
+            <span class="label">โหลดพื้นฐาน</span>
+            <strong id="baseLoad">0 kW</strong>
+            <span id="basePercent">0%</span>
+          </article>
+        </section>
+
+        <section class="panel">
+          <h2>กราฟโหลด 24 ชั่วโมง</h2>
+          <div class="chart-box">
+            <canvas id="loadChart"></canvas>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>โหลดตู้ชาร์จแยกตามประเภท</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ขนาดตู้</th>
+                  <th>กำลังใช้งาน</th>
+                  <th>โหลด</th>
+                  <th>กำลังหลังปรับลด</th>
+                </tr>
+              </thead>
+              <tbody id="chargerRows">
+                <tr><td colspan="4">รอข้อมูลการจำลอง</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <aside class="grid">
+        <article class="panel metric">
+          <span class="label">สถานะระบบ</span>
+          <strong><span id="statusPill" class="status-pill">NORMAL</span></strong>
+          <span id="overLimit">โหลดเกินขีดจำกัด: 0 kW</span>
+        </article>
+
+        <section class="panel pwm-card">
+          <h2>สัญญาณ PWM แบบ Realtime</h2>
+          <div class="metric">
+            <span class="label">ค่า PWM Output</span>
+            <strong id="pwmValue">255</strong>
+            <span id="pwmDetail">5.00 V / กำลังจำลอง 50.00 kW</span>
+          </div>
+          <div class="pwm-bar">
+            <div id="pwmFill" class="pwm-fill"></div>
+          </div>
+          <div class="signal-line">
+            <span>ปลายทางสัญญาณ</span>
+            <strong>Web PWM Monitor</strong>
+          </div>
+          <div class="signal-line">
+            <span>Realtime event</span>
+            <strong id="signalEvent">simulation:update</strong>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>สรุปกำลังไฟฟ้า</h2>
+          <div class="signal-line">
+            <span>โหลด EV</span>
+            <strong id="evLoad">0 kW</strong>
+          </div>
+          <div class="signal-line">
+            <span>ขีดจำกัด</span>
+            <strong id="limitLoad">0 kW</strong>
+          </div>
+          <div class="signal-line">
+            <span>ลดกำลังต่อตู้</span>
+            <strong id="reducePerCharger">0 kW</strong>
+          </div>
+        </section>
+      </aside>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>

@@ -1,8 +1,11 @@
 import { Router } from 'express'
-import { getCSVData } from '../controllers/simulation.controller.js'
+import { pause, reset, start, state } from '../controllers/simulation.controller.js'
 
 const router = Router()
 
-router.get('/csv', getCSVData)
+router.get('/state', state)
+router.post('/start', start)
+router.post('/pause', pause)
+router.post('/reset', reset)
 
 export default router

@@ -1,9 +1,40 @@
-import { readCSV } from '../services/csv.service.js'
+import {
+  getSimulationState,
+  pauseSimulation,
+  resetSimulation,
+  startSimulation,
+} from '../services/simulation.service.js'
 
-export async function getCSVData(req, res, next) {
+export async function start(req, res, next) {
   try {
-    const data = await readCSV()
-    res.json({ total: data.length, records: data })
+    await startSimulation(req.body || {})
+    res.json({ status: 'started' })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export function pause(_req, res, next) {
+  try {
+    pauseSimulation()
+    res.json({ status: 'paused' })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export function reset(_req, res, next) {
+  try {
+    resetSimulation()
+    res.json({ status: 'reset' })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export function state(_req, res, next) {
+  try {
+    res.json(getSimulationState())
   } catch (err) {
     next(err)
   }

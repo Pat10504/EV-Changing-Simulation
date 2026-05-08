@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>อัปโหลด CSV | ระบบจำลองการจัดการพลังงาน EV</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar project-header">
+      <a class="brand project-brand" href="/dashboard.html">
+        <span class="logo-frame">
+          <img class="university-logo" src="/assets/spu-logo.svg" alt="โลโก้มหาวิทยาลัยศรีปทุม">
+        </span>
+        <span class="brand-copy">
+          <span class="project-kicker">โครงงานวิศวกรรมไฟฟ้า | มหาวิทยาลัยศรีปทุม</span>
+          <h1>ระบบจำลองการจัดการพลังงานสำหรับสถานีชาร์จ EV</h1>
+          <p>อัปโหลดชุดข้อมูล CSV เพื่อจำลอง Load Management และแสดงสัญญาณ PWM แบบ Realtime</p>
+        </span>
+      </a>
+      <nav class="nav">
+        <a href="/dashboard.html">Dashboard</a>
+        <a class="active" href="/upload.html">อัปโหลด CSV</a>
+      </nav>
+    </header>
+
+    <section class="project-credits">
+      <span><strong>นักศึกษา</strong> นายพัฏ เครือดำรงค์ 66028195 <span class="dot-separator"></span> นายสาคเรศ ลิมปิจักร์ 66036675 <span class="dot-separator"></span> นายปภาวิชญ์ ดีล้น 66072828</span>
+      <span><strong>อาจารย์ที่ปรึกษา</strong> ผู้ช่วยศาสตราจารย์ เอกชัย ดีศิริ</span>
+    </section>
+
+    <section class="grid upload-grid">
+      <div class="panel">
+        <h2>อัปโหลดชุดข้อมูล</h2>
+        <form id="uploadForm" class="uploader">
+          <div class="field">
+            <label for="transformerMva">พิกัดหม้อแปลง (MVA)</label>
+            <input id="transformerMva" name="transformerMva" type="number" min="1" step="1" value="50">
+          </div>
+          <div class="field">
+            <label for="limitPercent">ขีดจำกัดโหลด (%)</label>
+            <input id="limitPercent" name="limitPercent" type="number" min="1" max="100" step="1" value="80">
+          </div>
+
+          <label class="drop" for="chargersFile">
+            <span class="drop-title">chargers.csv</span>
+            <span class="drop-subtitle" id="chargersFileName">เลือกไฟล์ทะเบียนตู้ชาร์จ</span>
+            <span class="file-button">เลือกไฟล์</span>
+            <input id="chargersFile" name="chargers" type="file" accept=".csv" required>
+          </label>
+
+          <label class="drop" for="loadPatternFile">
+            <span class="drop-title">load_pattern.csv</span>
+            <span class="drop-subtitle" id="loadPatternFileName">เลือกไฟล์โหลด 24 ชั่วโมง</span>
+            <span class="file-button">เลือกไฟล์</span>
+            <input id="loadPatternFile" name="loadPattern" type="file" accept=".csv" required>
+          </label>
+
+          <button class="primary" type="submit">ยืนยันและบันทึก</button>
+          <button id="clearButton" type="button">ล้างข้อมูลใน Database</button>
+        </form>
+        <div id="uploadMessage" class="message">เลือกไฟล์ CSV ทั้ง 2 ไฟล์เพื่อดูตัวอย่างก่อนบันทึก</div>
+      </div>
+
+      <div class="grid">
+        <section class="panel flat preview-panel">
+          <div class="section-heading">
+            <h3>ตัวอย่างข้อมูล chargers.csv</h3>
+            <span id="chargersPreviewCount" class="small">ยังไม่ได้เลือกไฟล์</span>
+          </div>
+          <div id="chargersPreview" class="table-wrap preview-table"></div>
+        </section>
+        <section class="panel flat preview-panel large-preview">
+          <div class="section-heading">
+            <h3>ตัวอย่างข้อมูล load_pattern.csv</h3>
+            <span id="loadPreviewCount" class="small">ยังไม่ได้เลือกไฟล์</span>
+          </div>
+          <div id="loadPreview" class="table-wrap preview-table tall"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script src="/js/upload.js"></script>
+</body>
+</html>
