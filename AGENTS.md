@@ -354,3 +354,15 @@ SIMULATION_INTERVAL_MS=2000
 ## 12. GitHub Repository
 
 https://github.com/Pat10504/EV-Changing-Simulation.git
+
+---
+
+## 13. การทดลอง MATLAB/Python แบบ local — 7 พฤศจิกายน 2026
+
+- พื้นที่ทดลองคือ `experiments/python-matlab-engine/` แยกจาก Dashboard และระบบจัดการพลังงานหลัก
+- ขอบเขตปัจจุบัน: HTML รับกระแสเป้าหมายจำนวนเต็ม 20–100 A → Flask → MATLAB Engine → จำลอง `DCFastCharger` → แสดงกระแสตัวอย่างสุดท้ายบนเว็บเดิม
+- ใช้ MATLAB R2026b session ที่เปิดและแชร์ชื่อ `EVChargingLab`, Python 3.13.18 ใน `.venv`, Engine 26.2 และ Flask 3.1.3
+- “บันทึกและรัน” เก็บค่าใน MATLAB Workspace สำหรับการจำลองรอบนั้น ไม่มีการเก็บประวัติลงฐานข้อมูล
+- มีหลักฐานผู้ใช้รันผ่าน Python และเว็บ local ที่เป้าหมาย 40 A ได้ 39.46074956936718 A ตรงกัน ค่านี้เป็นตัวอย่างสุดท้าย ไม่ใช่ค่าเฉลี่ยหรือการรับรองวงจรจริง
+- สอนให้ผู้ใช้ลงมือทีละขั้นและตรวจผลจริงก่อนขยายงาน เมื่อผู้ใช้มอบหมายให้ agent ทำ ให้ทำภายในขอบเขตที่อนุมัติ
+- ไม่เก็บ `.venv`, Python cache, `slprj` หรือ `.slxc` ใน Git ดูวิธีรันและบทบาทไฟล์ใน `experiments/python-matlab-engine/README.md`

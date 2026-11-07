@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>ทดลองกระแสชาร์จ</title>
+</head>
+<body>
+    <h1>ทดลองกระแสชาร์จด้วย MATLAB</h1>
+
+    <form method="post" action="/">
+        <label for="target_current_A">กระแสเป้าหมาย (A)</label>
+
+        <input
+            type="number"
+            id="target_current_A"
+            name="target_current_A"
+            min="20"
+            max="100"
+            step="1"
+            value="{{ target_current_A }}"
+            required
+        >
+
+        <button type="submit">บันทึกและรัน MATLAB</button>
+    </form>
+
+    {% if error %}
+        <p>{{ error }}</p>
+    {% endif %}
+
+    {% if result_A is not none %}
+        <h2>ผลการทดลอง</h2>
+        <p>กระแสเป้าหมาย: {{ target_current_A }} A</p>
+        <p>กระแสตัวอย่างสุดท้าย: {{ result_A }} A</p>
+    {% endif %}
+</body>
+</html>
