@@ -22,7 +22,7 @@
 6. Dashboard แสดงผล Realtime ผ่าน socket.io: metric cards, stacked chart, ตารางตู้ชาร์จ, ค่า PWM
 
 ### Phase ถัดไป
-เชื่อมต่อ Arduino ผ่าน USB Serial เพื่อส่งค่า PWM จริงไปยัง hardware จำลอง
+เชื่อมต่อ ESP32 ผ่าน Wi-Fi เพื่อดึงค่าล่าสุดจาก Backend แล้วแสดงสถานะโหลดและค่า PWM บนจอ LCD 16x2 I2C สำหรับ demo ให้อาจารย์ดู รายละเอียดอยู่ใน `HARDWARE.md`
 
 ---
 
@@ -38,7 +38,7 @@
 | CSV Parse | csv-parse | parse + validate |
 | Database | Supabase PostgreSQL | ใช้ service role key เฉพาะ backend |
 | Dev tools | nodemon, morgan | `npm run p` สำหรับ dev |
-| Hardware | Arduino + serialport | ยังไม่ implement, ทำใน Phase 2 |
+| Hardware demo | ESP32 DevKit + LCD 16x2 I2C | ใช้ Wi-Fi ดึงข้อมูลจาก backend ผ่าน HTTP polling |
 
 ---
 
@@ -59,6 +59,7 @@ charger_kW,total_units
 - `charger_kW` คือ rated power ของตู้ชาร์จ หน่วย kW
 - `total_units` คือจำนวนตู้ทั้งหมดของขนาดนั้น
 - รองรับหลายขนาด เช่น 50, 100, 120, 150, 180, 200 kW
+- ชื่อไฟล์ในเครื่องไม่จำเป็นต้องเป็น `chargers.csv` เสมอ แต่ header ต้องมี `charger_kW,total_units` และต้องเลือกไฟล์นี้ในช่องอัปโหลด `chargers.csv`
 
 ### ไฟล์ 2: `load_pattern.csv`
 ข้อมูลจำลองโหลด 24 ชั่วโมง โดย 1 แถวเท่ากับ 1 time slot
@@ -76,6 +77,8 @@ time,base_load_percent,active_50kW,active_150kW
 - `base_load_percent` คือโหลดพื้นฐานของพื้นที่ เช่น บ้านพักอาศัย อาคารพาณิชย์ หรือโหลดอื่นที่ใช้หม้อแปลงร่วมกัน
 - `active_[ขนาด]kW` คือจำนวนตู้ขนาดนั้นที่กำลังมีรถชาร์จในเวลานั้น
 - จำนวน active ต้องไม่เกิน `total_units` ที่อัปโหลดใน `chargers.csv`
+- ทุก column `active_[ขนาด]kW` ต้องมีขนาดตู้ตรงกับ `charger_kW` ใน `chargers.csv` เช่น `charger_kW=120` ต้องใช้ column `active_120kW`
+- ชื่อไฟล์ในเครื่องไม่จำเป็นต้องเป็น `load_pattern.csv` เสมอ แต่ header ต้องมี `time,base_load_percent` และ active columns ตามรูปแบบ `active_[ขนาด]kW`
 
 ---
 
@@ -117,8 +120,8 @@ Upload CSV -> validate -> clear old rows -> insert Supabase -> Dashboard start -
 - Header ใช้ชื่อโครงงาน: `ระบบจำลองการจัดการพลังงานสำหรับสถานีชาร์จ EV`
 - แสดงโลโก้มหาวิทยาลัยศรีปทุม
 - แสดงรายชื่อนักศึกษาและอาจารย์ที่ปรึกษา
-- Control: transformer MVA, load limit, speed, start/pause/reset
-- Metric: เวลา, โหลดรวม, โหลดพื้นฐาน, สถานะระบบ
+- Control: transformer MVA, load limit, power factor, speed, start/pause/reset
+- Metric: เวลา, โหลดรวมเป็น kVA, โหลดพื้นฐานเป็น kVA, สถานะระบบ
 - Chart: stacked area chart
   - Base load เป็นพื้นที่สีน้ำเงิน
   - EV load เป็นพื้นที่สีแดงที่ต่อขึ้นจาก base load
@@ -127,40 +130,59 @@ Upload CSV -> validate -> clear old rows -> insert Supabase -> Dashboard start -
 - PWM card แสดง PWM, voltage, simulated kW
 - ตารางโหลดตู้ชาร์จแยกตามประเภท
 
+### หน้า `formulas.html`
+- อธิบายสูตร P, Q, S และ Power Factor
+- อธิบายการแปลง EV load จาก kW เป็น kVA
+- อธิบายการตรวจ Overload ของหม้อแปลงด้วย apparent power
+- อธิบายการลดกำลังและ PWM simulation
+
 ---
 
 ## 6. วิธีคำนวณทางวิศวกรรมที่ใช้ในโปรเจค
 
-### สมมติฐานสำคัญ
-เพื่อให้ระบบจำลองเข้าใจง่ายและนำเสนอได้ทันเวลา โปรเจคนี้ถือว่า power factor ใกล้ 1 ดังนั้นใช้การแปลง:
+### หลักสำคัญ
+หม้อแปลงไฟฟ้ากำลังระบุพิกัดเป็น apparent power หน่วย MVA/kVA ดังนั้นการตรวจ Overload ต้องเทียบกับ `S` ไม่ใช่ `P` อย่างเดียว ส่วนตู้ EV Charger ยังใช้ rated power เป็น active power หน่วย kW ได้ตามปกติ
 
 ```text
-transformer_kW = transformer_MVA x 1000
+S^2 = P^2 + Q^2
+PF = cos(phi) = P / S
+P = S x PF
+Q = S x sin(phi)
+sin(phi) = sqrt(1 - PF^2)
 ```
 
-ถ้าต้องการความละเอียดเชิงวิศวกรรมมากขึ้นในอนาคต ให้ใช้:
+### ค่าหม้อแปลงและ Power Factor
 
 ```text
-transformer_kW = transformer_MVA x 1000 x power_factor
+transformer_kVA = transformer_MVA x 1000
+transformer_kW = transformer_kVA x power_factor
+transformer_kVAr = transformer_kVA x sin(phi)
+load_limit_kVA = transformer_kVA x (limit_percent / 100)
 ```
 
-เช่น 50 MVA ที่ PF = 0.9 จะได้ active power ประมาณ 45,000 kW
+ตัวอย่าง 50 MVA, PF = 0.90:
 
-### ค่าหม้อแปลงและโหลดพื้นฐาน
 ```text
-transformer_kW = transformer_MVA x 1000
-base_load_kW = transformer_kW x (base_load_percent / 100)
-load_limit_kW = transformer_kW x (limit_percent / 100)
+transformer_kVA = 50,000 kVA
+transformer_kW = 50,000 x 0.90 = 45,000 kW
 ```
 
-ความหมาย:
-- `transformer_MVA` คือพิกัดหม้อแปลงที่ผู้ใช้ตั้งบน Dashboard
-- `base_load_percent` มาจาก CSV และแทนโหลดพื้นฐานของพื้นที่
-- `limit_percent` คือขีดจำกัดการใช้งานที่ยอมให้ใช้ เช่น 80%
+### โหลดพื้นฐาน
+`base_load_percent` ใน CSV หมายถึง apparent loading ของโหลดพื้นฐานเทียบกับพิกัดหม้อแปลง
+
+```text
+base_load_kVA = transformer_kVA x (base_load_percent / 100)
+base_load_kW = base_load_kVA x power_factor
+base_load_kVAr = base_load_kVA x sin(phi)
+```
 
 ### โหลดของ EV Charger
+ตู้ EV แสดง rated power เป็น kW แต่เมื่อตรวจหม้อแปลงต้องแปลงเป็น kVA ด้วย PF
+
 ```text
 ev_load_kW = sum(active_[size] x size_kW)
+ev_load_kVA = ev_load_kW / power_factor
+ev_load_kVAr = ev_load_kVA x sin(phi)
 ```
 
 ตัวอย่าง:
@@ -169,12 +191,16 @@ active_50kW = 80
 active_150kW = 50
 ev_load_kW = (80 x 50) + (50 x 150)
 ev_load_kW = 4,000 + 7,500 = 11,500 kW
+ถ้า PF = 0.90
+ev_load_kVA = 11,500 / 0.90 = 12,777.78 kVA
 ```
 
 ### โหลดรวมของหม้อแปลง
 ```text
-total_load_kW = base_load_kW + ev_load_kW
-total_load_percent = (total_load_kW / transformer_kW) x 100
+total_P_kW = base_load_kW + ev_load_kW
+total_Q_kVAr = base_load_kVAr + ev_load_kVAr
+total_S_kVA = sqrt(total_P_kW^2 + total_Q_kVAr^2)
+total_load_percent = (total_S_kVA / transformer_kVA) x 100
 ```
 
 ### เกณฑ์สถานะระบบ
@@ -192,7 +218,8 @@ else -> NORMAL
 เมื่อโหลดรวมเกินขีดจำกัด ระบบจะคำนวณกำลังที่ต้องลดรวม:
 
 ```text
-over_limit_kW = total_load_kW - load_limit_kW
+over_limit_kVA = total_S_kVA - load_limit_kVA
+over_limit_kW = over_limit_kVA x power_factor
 total_active_chargers = sum(active ทุกขนาด)
 reduce_per_charger_kW = over_limit_kW / total_active_chargers
 ```
@@ -200,14 +227,18 @@ reduce_per_charger_kW = over_limit_kW / total_active_chargers
 จากนั้นลดกำลังของตู้แต่ละขนาดเท่ากันเป็น kW ต่อหัว:
 
 ```text
-new_power_kW = max(0, original_power_kW - reduce_per_charger_kW)
+min_charger_power_kW = 20
+new_power_kW = max(min_charger_power_kW, original_power_kW - reduce_per_charger_kW)
 new_power_percent = (new_power_kW / original_power_kW) x 100
 ```
 
 ข้อควรรู้:
 - วิธีนี้เป็น equal kW reduction ต่อ active charger
+- ตู้ EV Charger ที่ยังเปิดชาร์จต้องไม่ถูกลดต่ำกว่า 20 kW เพราะต่ำกว่านี้ถือว่าไฟไม่เข้ารถในโมเดล demo
+- ถ้าตู้ขนาดเล็กชนขั้นต่ำ 20 kW ก่อน ระบบจะกระจายส่วนที่ลดไม่ได้ไปยังตู้ขนาดใหญ่ที่ยังมี headroom ต่อ
+- ถ้าลดจนทุกตู้ถึงขั้นต่ำ 20 kW แล้วยังไม่พอ ระบบจึงรายงาน `control_limited` และส่วนที่ยังลดไม่ได้ (`unmet_reduction_kW`)
 - เป็นโมเดลจำลองที่เข้าใจง่าย ไม่ใช่ optimal load allocation
-- ในอนาคตอาจปรับเป็น proportional reduction ตามขนาดตู้ หรือ priority-based control ได้
+- ในอนาคตอาจปรับเป็น proportional reduction ตามขนาดตู้, priority-based control หรือแยก PF ของโหลดแต่ละประเภทได้
 
 ### PWM สำหรับจำลอง hardware
 ระบบจำลองเลือกตู้ 50 kW เป็นแหล่งอ้างอิงหลัก หากไม่มีจะใช้ตู้ขนาดแรกที่พบ
@@ -234,6 +265,7 @@ voltage = (161 / 255) x 5 = 3.16 V
 ev-charging-simulation/
 ├── CLAUDE.md
 ├── AGENTS.md
+├── HARDWARE.md                       # แผน hardware demo จากอุปกรณ์จริง
 ├── package.json
 ├── package-lock.json
 ├── .env                              # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
@@ -246,14 +278,21 @@ ev-charging-simulation/
     ├── server.js                     # start server
     ├── config/
     │   ├── index.js                  # อ่าน .env
-    │   └── constants.js
+    │   ├── constants.js
+    │   └── paths.js                  # path ของ public files
     ├── routes/
     │   ├── index.js
+    │   ├── page.routes.js            # /, /dashboard, /upload, /formulas
+    │   ├── health.routes.js          # /api/health
     │   ├── upload.routes.js
     │   └── simulation.routes.js
     ├── controllers/
+    │   ├── page.controller.js        # ส่ง HTML pages
+    │   ├── health.controller.js
     │   ├── upload.controller.js
     │   └── simulation.controller.js
+    ├── middleware/
+    │   └── errorHandler.js
     ├── services/
     │   ├── db.service.js             # Supabase CRUD
     │   ├── csv.service.js            # parse/validate CSV upload
@@ -263,6 +302,7 @@ ev-charging-simulation/
     └── public/
         ├── upload.html
         ├── dashboard.html
+        ├── formulas.html
         ├── assets/
         │   └── spu-logo.svg
         ├── css/
@@ -284,9 +324,12 @@ ev-charging-simulation/
 - CSV upload + preview + validation
 - Dashboard realtime จาก Supabase จริง
 - Calculation logic dynamic ตามขนาดตู้
+- Power Factor input ปรับได้บน Dashboard และใช้คำนวณ kW/kVA/kVAr
 - PWM simulation บนเว็บ
 - UI ภาษาไทยแบบ minimal พร้อมโลโก้ SPU และข้อมูลโครงงาน
 - Chart แบบ stacked Base load + EV load พร้อมเส้น limit
+- หน้า formulas อธิบายสูตร P, Q, S, PF, Overload และ PWM
+- เพิ่ม `HARDWARE.md` สำหรับ Phase hardware demo ด้วย ESP32 + LCD 16x2 I2C
 - Clear database แล้ว simulation cache ถูก reset
 - ไม่มี local CSV fallback ใน production flow
 
@@ -296,8 +339,10 @@ ev-charging-simulation/
 3. เพิ่ม validation เชิงลึก: active chargers ต้องไม่เกิน total units
 4. เพิ่ม message บน Dashboard เมื่อยังไม่มีข้อมูลใน Supabase
 5. Deploy บน Railway/Render
-6. Phase 2: เพิ่ม `serialport`, Arduino sketch, และทดสอบส่ง PWM ผ่าน USB Serial
-7. ถ้าต้องการความแม่นยำเชิงไฟฟ้าเพิ่ม: เพิ่ม power factor, voltage level, current calculation, และ control strategy แบบ proportional/priority
+6. Phase hardware demo: เพิ่ม endpoint `GET /api/hardware/latest` สำหรับให้ ESP32 อ่านค่าล่าสุด
+7. เขียน firmware ESP32: เชื่อม Wi-Fi, HTTP polling, parse JSON, แสดงผลบน LCD 16x2 I2C
+8. ทดสอบ I2C address ของ LCD (`0x27` หรือ `0x3F`) และทดสอบไฟเลี้ยง 3.3V/5V อย่างระวัง
+9. ถ้าต้องการความแม่นยำเชิงไฟฟ้าเพิ่ม: เพิ่ม voltage level, current calculation, PF แยกตามโหลด และ control strategy แบบ proportional/priority
 
 ---
 
@@ -309,8 +354,14 @@ npm run p
 ```
 
 เปิดเว็บ:
-- Dashboard: `http://localhost:3000/dashboard.html`
-- Upload: `http://localhost:3000/upload.html`
+- Dashboard: `http://localhost:3000/dashboard`
+- Upload: `http://localhost:3000/upload`
+- สูตรคำนวณ: `http://localhost:3000/formulas`
+
+รองรับ URL แบบไฟล์เดิมด้วย:
+- `http://localhost:3000/dashboard.html`
+- `http://localhost:3000/upload.html`
+- `http://localhost:3000/formulas.html`
 
 ถ้า port 3000 ถูกใช้อยู่ ให้ปิด process เดิมก่อน หรือรันด้วย port อื่น:
 
@@ -330,12 +381,14 @@ SUPABASE_SERVICE_ROLE_KEY=...
 PORT=3000
 TRANSFORMER_MVA=50
 LIMIT_PERCENT=80
+POWER_FACTOR=0.90
 SIMULATION_INTERVAL_MS=2000
 ```
 
 หมายเหตุ:
 - `SUPABASE_SERVICE_ROLE_KEY` ใช้เฉพาะฝั่ง backend ห้ามเอาไปใช้ใน frontend
 - Tables ต้องถูกสร้างด้วย `supabase/schema.sql` ก่อนใช้งาน upload
+- ค่าจริงของ ESP32 (`WIFI_SSID`, `WIFI_PASSWORD`, `API_URL`) อยู่ใน `hardware/esp32_dashboard_lcd/secrets.h` ซึ่ง Git ไม่ติดตาม ใช้ `secrets.example.h` เป็นตัวอย่างสำหรับเครื่องใหม่
 
 ---
 

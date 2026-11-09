@@ -26,7 +26,7 @@ export async function uploadDataset(req, res, next) {
     const chargersRows = await parseCSVBuffer(chargersFile.buffer)
     const loadPatternRows = await parseCSVBuffer(loadPatternFile.buffer)
     const chargers = normalizeChargers(chargersRows)
-    const loadPatterns = normalizeLoadPatterns(loadPatternRows)
+    const loadPatterns = normalizeLoadPatterns(loadPatternRows, chargers)
 
     const saved = await saveSimulationDataset({ chargers, loadPatterns })
     clearSimulationCache()

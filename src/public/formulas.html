@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>สูตรคำนวณ | ระบบจำลองการจัดการพลังงาน EV</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar project-header">
+      <a class="brand project-brand" href="/dashboard">
+        <span class="logo-frame">
+          <img class="university-logo" src="/assets/spu-logo.svg" alt="โลโก้มหาวิทยาลัยศรีปทุม">
+        </span>
+        <span class="brand-copy">
+          <span class="project-kicker">Engineering Calculation Center</span>
+          <h1>ศูนย์อธิบายสูตรคำนวณโหลดหม้อแปลง</h1>
+          <p>อธิบายว่า parameter ในหน้า Dashboard ถูกนำไปคำนวณ Base load, EV load, Total load, Overload และ PWM อย่างไรตามหลัก P-Q-S</p>
+        </span>
+      </a>
+      <nav class="nav">
+        <a href="/dashboard">Dashboard</a>
+        <a href="/upload">อัปโหลด CSV</a>
+        <a class="active" href="/formulas">สูตรคำนวณ</a>
+      </nav>
+    </header>
+
+    <section class="formula-hero panel">
+      <div>
+        <span class="project-kicker">สรุปแนวคิดหลัก</span>
+        <h2>หม้อแปลงดูที่ kVA, ตู้ EV ดูที่ kW</h2>
+        <p>ตู้ EV ระบุกำลังเป็น kW เพราะเป็นกำลังจริงที่จ่ายให้รถ แต่หม้อแปลงรับภาระเป็น kVA หรือ apparent power ดังนั้นระบบต้องใช้ Power Factor แปลง kW เป็น kVA ก่อนตรวจว่าโหลดเกินขีดจำกัดหรือไม่</p>
+        <div class="formula-tags">
+          <span>Dashboard input -> MVA, Limit, PF</span>
+          <span>CSV input -> Base %, Active Chargers</span>
+          <span>Output -> kVA, kW, PWM</span>
+        </div>
+      </div>
+      <div class="formula-triangle-card">
+        <img class="power-triangle-image" src="/assets/power-triangle.jpg" alt="สามเหลี่ยมกำลังไฟฟ้า P Q S ในระบบไฟฟ้ากระแสสลับ">
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <h2>Parameter บน Dashboard ใช้ทำอะไร</h2>
+        <span class="small">ตัวแปรเดียวกับที่ใช้ใน code</span>
+      </div>
+      <div class="parameter-grid">
+        <article class="parameter-card">
+          <span class="parameter-name">พิกัดหม้อแปลง (MVA)</span>
+          <strong>transformer_mva</strong>
+          <p>พิกัด apparent power ของหม้อแปลง เช่น 30 MVA หมายถึงหม้อแปลงรองรับได้ 30,000 kVA</p>
+          <code>transformer_kVA = transformer_mva x 1000</code>
+        </article>
+        <article class="parameter-card">
+          <span class="parameter-name">ขีดจำกัดโหลด (%)</span>
+          <strong>limit_percent</strong>
+          <p>ค่าที่กำหนดว่าหม้อแปลงควรใช้งานไม่เกินกี่เปอร์เซ็นต์ เช่น 80% ของ 30,000 kVA = 24,000 kVA</p>
+          <code>load_limit_kVA = transformer_kVA x limit_percent / 100</code>
+        </article>
+        <article class="parameter-card">
+          <span class="parameter-name">Power Factor</span>
+          <strong>power_factor</strong>
+          <p>ใช้แปลงระหว่าง kW และ kVA โดย PF = P / S ถ้า PF ต่ำ โหลด kVA ที่หม้อแปลงเห็นจะสูงขึ้น</p>
+          <code>ev_load_kVA = ev_load_kW / power_factor</code>
+        </article>
+        <article class="parameter-card">
+          <span class="parameter-name">Base Load (%)</span>
+          <strong>base_load_percent</strong>
+          <p>มาจาก CSV และแทนโหลดพื้นฐานของพื้นที่ เช่น บ้านพักอาศัย อาคาร หรือโหลดอื่นที่ใช้หม้อแปลงร่วมกัน</p>
+          <code>base_load_kVA = transformer_kVA x base_load_percent / 100</code>
+        </article>
+        <article class="parameter-card">
+          <span class="parameter-name">จำนวนตู้ที่ใช้งาน</span>
+          <strong>active_50kW, active_150kW</strong>
+          <p>จำนวนตู้ที่กำลังมีรถชาร์จ ณ time slot นั้น ใช้คูณกับ rated power ของตู้เพื่อหา EV load</p>
+          <code>ev_load_kW = Σ(active_size x size_kW)</code>
+        </article>
+        <article class="parameter-card">
+          <span class="parameter-name">ความเร็วจำลอง</span>
+          <strong>interval_ms</strong>
+          <p>กำหนดว่า backend จะอ่านข้อมูลจาก Supabase ทุกกี่มิลลิวินาที ไม่มีผลต่อสูตรไฟฟ้า</p>
+          <code>1 record / interval_ms</code>
+        </article>
+      </div>
+    </section>
+
+    <section class="formula-flow">
+      <article class="panel flow-card">
+        <span class="flow-step">1</span>
+        <h2>แปลงพิกัดหม้อแปลง</h2>
+        <p>หม้อแปลงระบุพิกัดเป็น MVA จึงแปลงเป็น kVA เพื่อใช้เทียบกับโหลดรวม</p>
+        <pre><code>transformer_kVA = transformer_MVA x 1000</code></pre>
+      </article>
+      <article class="panel flow-card">
+        <span class="flow-step">2</span>
+        <h2>หา Base Load</h2>
+        <p>Base load เป็นโหลดพื้นฐานที่มีอยู่แล้วก่อนรวมโหลดจาก EV</p>
+        <pre><code>base_load_kVA = transformer_kVA x base_load_percent / 100</code></pre>
+      </article>
+      <article class="panel flow-card">
+        <span class="flow-step">3</span>
+        <h2>หา EV Load</h2>
+        <p>ตู้ EV คิดเป็น kW ก่อน แล้วแปลงเป็น kVA ด้วย PF เพื่อเทียบกับหม้อแปลง</p>
+        <pre><code>ev_load_kW = Σ(active_size x size_kW)
+ev_load_kVA = ev_load_kW / PF</code></pre>
+      </article>
+      <article class="panel flow-card">
+        <span class="flow-step">4</span>
+        <h2>รวม P และ Q</h2>
+        <p>ระบบใช้ power triangle เพื่อรวมโหลดจริงและโหลดรีแอคทีฟ</p>
+        <pre><code>sinφ = √(1 - PF²)
+total_P = base_kW + ev_kW
+total_Q = base_kVAr + ev_kVAr
+total_S = √(total_P² + total_Q²)</code></pre>
+      </article>
+      <article class="panel flow-card">
+        <span class="flow-step">5</span>
+        <h2>ตรวจสถานะ</h2>
+        <p>โหลดรวมที่ใช้ตรวจหม้อแปลงคือ total_S หน่วย kVA</p>
+        <pre><code>loading% = total_S / transformer_kVA x 100
+if loading% > limit -> OVERLOAD
+else if loading% > 70 -> WARNING</code></pre>
+      </article>
+      <article class="panel flow-card">
+        <span class="flow-step">6</span>
+        <h2>ลดกำลังและ PWM</h2>
+        <p>เมื่อ Overload ระบบลดกำลังเฉลี่ยต่อ active charger โดยไม่ลดต่ำกว่า 20 kW ต่อหัว ถ้าตู้เล็กชนขั้นต่ำก่อนจะกระจายส่วนที่เหลือไปยังตู้ใหญ่ แล้วแปลงเป็น PWM 0-255</p>
+        <pre><code>over_limit_kVA = total_S - load_limit_kVA
+over_limit_kW = over_limit_kVA x PF
+reduce_per_charger = over_limit_kW / total_active
+new_power_kW = max(20, original_kW - reduce_per_charger)
+redistribute remaining reduction to chargers above 20 kW
+PWM = new_power_kW / original_kW x 255</code></pre>
+      </article>
+    </section>
+
+    <section class="panel worked-example">
+      <div class="section-heading">
+        <h2>ตัวอย่างจากหน้า Dashboard</h2>
+        <span class="small">ใช้ค่าตัวอย่างเพื่ออ่านสูตรตามได้</span>
+      </div>
+      <div class="example-layout">
+        <div class="example-inputs">
+          <h3>ค่าที่ตั้งบน Dashboard</h3>
+          <ul>
+            <li><strong>Transformer</strong> 30 MVA = 30,000 kVA</li>
+            <li><strong>Limit</strong> 80% = 24,000 kVA</li>
+            <li><strong>Power Factor</strong> 0.90</li>
+            <li><strong>Base load</strong> 35% = 10,500 kVA</li>
+            <li><strong>EV load</strong> 5,000 kW</li>
+          </ul>
+        </div>
+        <div class="example-results">
+          <h3>ผลคำนวณที่ได้</h3>
+          <div class="result-grid">
+            <span>Base load</span><strong>10,500 kVA</strong>
+            <span>EV load</span><strong>5,000 kW / 5,555.56 kVA</strong>
+            <span>Total S</span><strong>16,055.56 kVA</strong>
+            <span>Loading</span><strong>53.52%</strong>
+            <span>Status</span><strong>NORMAL</strong>
+          </div>
+        </div>
+      </div>
+      <p class="example-note">ถ้า EV load เพิ่มจน total_S เกิน 24,000 kVA ระบบจะเข้าสู่ OVERLOAD และเริ่มคำนวณการลดกำลังต่อหัวกับค่า PWM</p>
+    </section>
+
+    <section class="formula-grid">
+      <article class="panel formula-card">
+        <h2>ทำไม Dashboard แสดง Base/Total เป็น kVA?</h2>
+        <p>เพราะพิกัดหม้อแปลงเป็น MVA/kVA การตรวจว่าเกินพิกัดหรือไม่ต้องดู apparent power S ไม่ใช่ active power P เพียงอย่างเดียว</p>
+      </article>
+      <article class="panel formula-card">
+        <h2>ทำไม EV ยังเป็น kW?</h2>
+        <p>rated power ของตู้ชาร์จ เช่น 50 kW หรือ 150 kW คือกำลังจริง P ที่จ่ายให้รถ จึงแสดงเป็น kW ในตารางและสรุป EV load</p>
+      </article>
+      <article class="panel formula-card">
+        <h2>ทำไม PF สำคัญ?</h2>
+        <p>ที่ EV load kW เท่ากัน ถ้า PF ต่ำลง ค่า kVA จะสูงขึ้น ทำให้หม้อแปลงรับภาระมากขึ้นและเข้าใกล้ Overload เร็วขึ้น</p>
+      </article>
+    </section>
+
+    <section class="panel references-panel">
+      <h2>แหล่งอ้างอิงสูตร</h2>
+      <p>สูตรในหน้านี้อ้างอิงจากหลัก Power Triangle, apparent power และ three-phase AC power formulas จากเอกสารวิศวกรรมไฟฟ้า</p>
+      <div class="reference-links">
+        <a href="https://product-help.schneider-electric.com/PowerLogic-ION9000/en-us/content/13-measurements/apparent-active-and-reactive-power-pqs.htm" target="_blank" rel="noreferrer">Schneider Electric: P, Q, S</a>
+        <a href="https://www.electrical-installation.org/enwiki/Installed_apparent_power_%28kVA%29" target="_blank" rel="noreferrer">Electrical Installation Guide: Installed kVA</a>
+        <a href="https://www.engineeringtoolbox.com/kva-reactive-d_886.html" target="_blank" rel="noreferrer">Engineering ToolBox: Active, Reactive, Apparent Power</a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

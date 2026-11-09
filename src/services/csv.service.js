@@ -20,6 +20,8 @@ export async function parseCSVBuffer(buffer) {
 }
 
 export function normalizeChargers(rows) {
+  const seenSizes = new Set()
+
   return rows.map((row, index) => {
     const charger_kw = Number(row.charger_kW ?? row.charger_kw ?? row.kw)
     const total_units = Number(row.total_units ?? row.totalUnits ?? row.units)
@@ -32,11 +34,21 @@ export function normalizeChargers(rows) {
       throw new Error(`chargers.csv แถวที่ ${index + 2}: total_units ต้องเป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป`)
     }
 
+    if (seenSizes.has(charger_kw)) {
+      throw new Error(`chargers.csv แถวที่ ${index + 2}: charger_kW ${charger_kw} ซ้ำกับแถวก่อนหน้า`)
+    }
+
+    seenSizes.add(charger_kw)
+
     return { charger_kw, total_units }
   })
 }
 
-export function normalizeLoadPatterns(rows) {
+export function normalizeLoadPatterns(rows, chargers = []) {
+  const chargerLimitBySize = new Map(
+    chargers.map((charger) => [Number(charger.charger_kw), Number(charger.total_units)])
+  )
+
   return rows.map((row, index) => {
     const time_slot = row.time ?? row.time_slot
     const base_load_percent = Number(row.base_load_percent)
@@ -52,10 +64,34 @@ export function normalizeLoadPatterns(rows) {
     const charger_data = {}
     for (const [key, value] of Object.entries(row)) {
       if (key.startsWith(CSV_FIELDS.activePrefix)) {
-        charger_data[key] = Number(value || 0)
+        const size = parseActiveChargerSize(key)
+        const active = Number(value || 0)
+        const totalUnits = chargerLimitBySize.get(size)
+
+        if (!Number.isFinite(size) || size <= 0) {
+          throw new Error(`load_pattern.csv column ${key}: ชื่อต้องอยู่ในรูปแบบ active_[ขนาด]kW เช่น active_50kW`)
+        }
+
+        if (totalUnits === undefined) {
+          throw new Error(`load_pattern.csv column ${key}: ไม่มีตู้ ${size} kW ใน chargers.csv`)
+        }
+
+        if (!Number.isInteger(active) || active < 0) {
+          throw new Error(`load_pattern.csv แถวที่ ${index + 2}: ${key} ต้องเป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป`)
+        }
+
+        if (active > totalUnits) {
+          throw new Error(`load_pattern.csv แถวที่ ${index + 2}: ${key} = ${active} เกินจำนวนตู้ทั้งหมด ${totalUnits}`)
+        }
+
+        charger_data[key] = active
       }
     }
 
     return { time_slot, base_load_percent, charger_data }
   })
+}
+
+function parseActiveChargerSize(key) {
+  return Number(key.replace(CSV_FIELDS.activePrefix, '').replace('kW', ''))
 }

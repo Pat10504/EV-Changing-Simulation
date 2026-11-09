@@ -9,7 +9,7 @@
 <body>
   <main class="shell">
     <header class="topbar project-header">
-      <a class="brand project-brand" href="/dashboard.html">
+      <a class="brand project-brand" href="/dashboard">
         <span class="logo-frame">
           <img class="university-logo" src="/assets/spu-logo.svg" alt="โลโก้มหาวิทยาลัยศรีปทุม">
         </span>
@@ -20,8 +20,9 @@
         </span>
       </a>
       <nav class="nav">
-        <a class="active" href="/dashboard.html">Dashboard</a>
-        <a href="/upload.html">อัปโหลด CSV</a>
+        <a class="active" href="/dashboard">Dashboard</a>
+        <a href="/upload">อัปโหลด CSV</a>
+        <a href="/formulas">สูตรคำนวณ</a>
       </nav>
     </header>
 
@@ -38,6 +39,10 @@
       <div class="field">
         <label for="limitPercent">ขีดจำกัดโหลด (%)</label>
         <input id="limitPercent" type="number" min="1" max="100" value="80">
+      </div>
+      <div class="field compact-field">
+        <label for="powerFactor">Power Factor</label>
+        <input id="powerFactor" type="number" min="0.1" max="1" step="0.01" value="0.90">
       </div>
       <div class="field">
         <label for="speed">ความเร็ว</label>
@@ -63,13 +68,18 @@
           </article>
           <article class="panel metric">
             <span class="label">โหลดรวม</span>
-            <strong id="totalLoad">0 kW</strong>
-            <span id="totalPercent">0%</span>
+            <strong id="totalLoad">0 kVA</strong>
+            <span id="totalPercent">0% ของพิกัดหม้อแปลง</span>
+          </article>
+          <article class="panel metric controlled-load-card">
+            <span class="label">โหลดหลังควบคุม</span>
+            <strong id="controlledLoad">0 kVA</strong>
+            <span id="controlledPercent">0% หลังปรับลด</span>
           </article>
           <article class="panel metric">
             <span class="label">โหลดพื้นฐาน</span>
-            <strong id="baseLoad">0 kW</strong>
-            <span id="basePercent">0%</span>
+            <strong id="baseLoad">0 kVA</strong>
+            <span id="basePercent">0% โหลดพื้นฐาน</span>
           </article>
         </section>
 
@@ -89,7 +99,7 @@
                   <th>ขนาดตู้</th>
                   <th>กำลังใช้งาน</th>
                   <th>โหลด</th>
-                  <th>กำลังหลังปรับลด</th>
+                  <th>กำลังต่อหัวหลังปรับ</th>
                 </tr>
               </thead>
               <tbody id="chargerRows">
@@ -135,11 +145,27 @@
           </div>
           <div class="signal-line">
             <span>ขีดจำกัด</span>
-            <strong id="limitLoad">0 kW</strong>
+            <strong id="limitLoad">0 kVA</strong>
           </div>
           <div class="signal-line">
-            <span>ลดกำลังต่อตู้</span>
+            <span>โหลดก่อนควบคุม</span>
+            <strong id="preControlLoad">0 kVA</strong>
+          </div>
+          <div class="signal-line">
+            <span>โหลดหลังควบคุม</span>
+            <strong id="postControlLoad">0 kVA</strong>
+          </div>
+          <div class="signal-line">
+            <span>ต้องลดเฉลี่ยต่อหัว</span>
             <strong id="reducePerCharger">0 kW</strong>
+          </div>
+          <div class="signal-line">
+            <span>ขั้นต่ำต่อตู้</span>
+            <strong id="minChargerPower">20 kW</strong>
+          </div>
+          <div class="signal-line">
+            <span>ผลการกระจาย</span>
+            <strong id="controlLimit">ปกติ</strong>
           </div>
         </section>
       </aside>

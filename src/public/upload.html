@@ -9,7 +9,7 @@
 <body>
   <main class="shell">
     <header class="topbar project-header">
-      <a class="brand project-brand" href="/dashboard.html">
+      <a class="brand project-brand" href="/dashboard">
         <span class="logo-frame">
           <img class="university-logo" src="/assets/spu-logo.svg" alt="โลโก้มหาวิทยาลัยศรีปทุม">
         </span>
@@ -20,8 +20,9 @@
         </span>
       </a>
       <nav class="nav">
-        <a href="/dashboard.html">Dashboard</a>
-        <a class="active" href="/upload.html">อัปโหลด CSV</a>
+        <a href="/dashboard">Dashboard</a>
+        <a class="active" href="/upload">อัปโหลด CSV</a>
+        <a href="/formulas">สูตรคำนวณ</a>
       </nav>
     </header>
 
@@ -33,6 +34,19 @@
     <section class="grid upload-grid">
       <div class="panel">
         <h2>อัปโหลดชุดข้อมูล</h2>
+        <div class="template-actions">
+          <a class="template-link" href="/templates/chargers.csv" download>Template chargers.csv</a>
+          <a class="template-link" href="/templates/load_pattern.csv" download>Template load_pattern.csv</a>
+        </div>
+        <div class="csv-rules">
+          <h3>กติกา CSV แบบ Dynamic</h3>
+          <p>เพิ่มหรือเปลี่ยนขนาดตู้ได้จาก `chargers.csv` แล้วใช้ column `active_[ขนาด]kW` ให้ตรงกันใน `load_pattern.csv`</p>
+          <ul>
+            <li>`charger_kW` และเลขใน `active_[ขนาด]kW` ต้องตรงกัน เช่น `120` กับ `active_120kW`</li>
+            <li>`active_*` ทุกแถวต้องไม่เกิน `total_units` ของขนาดตู้นั้น</li>
+            <li>ชื่อไฟล์ในเครื่องเปลี่ยนได้ แต่ field upload และ header CSV ต้องตรงรูปแบบนี้</li>
+          </ul>
+        </div>
         <form id="uploadForm" class="uploader">
           <div class="field">
             <label for="transformerMva">พิกัดหม้อแปลง (MVA)</label>

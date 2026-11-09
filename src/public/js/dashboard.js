@@ -1,6 +1,7 @@
 const STORAGE_KEYS = {
   transformerMva: 'transformerMva',
   limitPercent: 'limitPercent',
+  powerFactor: 'powerFactor',
 }
 
 const MAX_CHART_POINTS = 288
@@ -8,6 +9,7 @@ const MAX_CHART_POINTS = 288
 const ui = {
   transformerMva: document.getElementById('transformerMva'),
   limitPercent: document.getElementById('limitPercent'),
+  powerFactor: document.getElementById('powerFactor'),
   speed: document.getElementById('speed'),
   playButton: document.getElementById('playButton'),
   pauseButton: document.getElementById('pauseButton'),
@@ -17,6 +19,8 @@ const ui = {
   recordProgress: document.getElementById('recordProgress'),
   totalLoad: document.getElementById('totalLoad'),
   totalPercent: document.getElementById('totalPercent'),
+  controlledLoad: document.getElementById('controlledLoad'),
+  controlledPercent: document.getElementById('controlledPercent'),
   baseLoad: document.getElementById('baseLoad'),
   basePercent: document.getElementById('basePercent'),
   statusPill: document.getElementById('statusPill'),
@@ -27,12 +31,17 @@ const ui = {
   signalEvent: document.getElementById('signalEvent'),
   evLoad: document.getElementById('evLoad'),
   limitLoad: document.getElementById('limitLoad'),
+  preControlLoad: document.getElementById('preControlLoad'),
+  postControlLoad: document.getElementById('postControlLoad'),
   reducePerCharger: document.getElementById('reducePerCharger'),
+  minChargerPower: document.getElementById('minChargerPower'),
+  controlLimit: document.getElementById('controlLimit'),
   chargerRows: document.getElementById('chargerRows'),
 }
 
 const loadChart = createLoadChart()
 const socket = io()
+let isSimulationRunning = false
 
 initDashboard()
 
@@ -45,12 +54,21 @@ function initDashboard() {
 function loadSavedSettings() {
   ui.transformerMva.value = localStorage.getItem(STORAGE_KEYS.transformerMva) || ui.transformerMva.value
   ui.limitPercent.value = localStorage.getItem(STORAGE_KEYS.limitPercent) || ui.limitPercent.value
+  ui.powerFactor.value = localStorage.getItem(STORAGE_KEYS.powerFactor) || ui.powerFactor.value
 }
 
 function bindControlEvents() {
   ui.playButton.addEventListener('click', startSimulation)
-  ui.pauseButton.addEventListener('click', () => sendSimulationCommand('/api/simulation/pause'))
+  ui.powerFactor.addEventListener('change', applyRealtimeSettings)
+  ui.transformerMva.addEventListener('change', applyRealtimeSettings)
+  ui.limitPercent.addEventListener('change', applyRealtimeSettings)
+  ui.speed.addEventListener('change', applyRealtimeSettings)
+  ui.pauseButton.addEventListener('click', () => {
+    isSimulationRunning = false
+    sendSimulationCommand('/api/simulation/pause')
+  })
   ui.resetButton.addEventListener('click', () => {
+    isSimulationRunning = false
     resetChart()
     sendSimulationCommand('/api/simulation/reset')
   })
@@ -67,17 +85,29 @@ function bindSocketEvents() {
 
 function startSimulation() {
   saveSettings()
+  isSimulationRunning = true
 
   sendSimulationCommand('/api/simulation/start', {
     transformer_mva: Number(ui.transformerMva.value),
     limit_percent: Number(ui.limitPercent.value),
+    power_factor: Number(ui.powerFactor.value),
     interval_ms: Number(ui.speed.value),
   })
+}
+
+function applyRealtimeSettings() {
+  saveSettings()
+
+  if (loadChart.data.labels.length > 0) {
+    resetChart()
+    if (isSimulationRunning) startSimulation()
+  }
 }
 
 function saveSettings() {
   localStorage.setItem(STORAGE_KEYS.transformerMva, ui.transformerMva.value)
   localStorage.setItem(STORAGE_KEYS.limitPercent, ui.limitPercent.value)
+  localStorage.setItem(STORAGE_KEYS.powerFactor, ui.powerFactor.value)
 }
 
 async function sendSimulationCommand(url, body = {}) {
@@ -104,14 +134,30 @@ function renderSimulationUpdate(data) {
 function renderLoadSummary(data) {
   ui.timeSlot.textContent = data.time
   ui.recordProgress.textContent = `${data.index + 1} / ${data.totalRecords} records`
-  ui.totalLoad.textContent = `${formatNumber(data.total_load_kW)} kW`
+  ui.totalLoad.textContent = `${formatWholeNumber(data.total_load_kVA)} kVA`
   ui.totalPercent.textContent = `${data.total_load_percent}% ของพิกัดหม้อแปลง`
-  ui.baseLoad.textContent = `${formatNumber(data.base_load_kW)} kW`
+  const controlledLoadKva = data.status === 'OVERLOAD'
+    ? data.adjusted_total_load_kVA
+    : data.total_load_kVA
+  const controlledPercent = data.status === 'OVERLOAD'
+    ? data.adjusted_total_load_percent
+    : data.total_load_percent
+  ui.controlledLoad.textContent = `${formatWholeNumber(controlledLoadKva)} kVA`
+  ui.controlledPercent.textContent = `${formatNumber(controlledPercent)}% หลังปรับลด`
+  ui.baseLoad.textContent = `${formatWholeNumber(data.base_load_kVA)} kVA`
   ui.basePercent.textContent = `${data.base_load_percent}% โหลดพื้นฐาน`
   ui.evLoad.textContent = `${formatNumber(data.ev_load_kW)} kW`
-  ui.limitLoad.textContent = `${formatNumber(data.load_limit_kW)} kW`
+  ui.limitLoad.textContent = `${formatNumber(data.load_limit_kVA)} kVA`
+  ui.preControlLoad.textContent = `${formatWholeNumber(data.total_load_kVA)} kVA`
+  ui.postControlLoad.textContent = `${formatWholeNumber(controlledLoadKva)} kVA`
   ui.reducePerCharger.textContent = `${formatNumber(data.reduce_per_charger_kW)} kW`
-  ui.overLimit.textContent = `โหลดเกินขีดจำกัด: ${formatNumber(data.over_limit_kW)} kW`
+  ui.minChargerPower.textContent = `${formatNumber(data.min_charger_power_kW || 20)} kW`
+  ui.controlLimit.textContent = getControlLimitText(data)
+  ui.overLimit.textContent = data.control_limited
+    ? `ยังเกินหลังลด: ${formatNumber(data.remaining_over_limit_kVA)} kVA`
+    : data.status === 'OVERLOAD'
+      ? `หลังควบคุมอยู่ใน limit`
+      : `โหลดเกินขีดจำกัด: ${formatNumber(data.over_limit_kVA)} kVA`
 }
 
 function renderPwmSignal(data) {
@@ -132,7 +178,8 @@ function renderChargerTable(data) {
   }
 
   ui.chargerRows.innerHTML = chargerRows.map(([key, charger]) => {
-    const adjustedText = getAdjustedPowerText(data.charger_adjusted?.[key], charger.size_kW)
+    const adjusted = data.charger_adjusted?.[key]
+    const adjustedText = getAdjustedPowerText(adjusted, charger.size_kW)
     const totalUnits = charger.total_units || '-'
 
     return `
@@ -148,7 +195,21 @@ function renderChargerTable(data) {
 
 function getAdjustedPowerText(adjusted, originalPowerKw) {
   if (!adjusted) return `${originalPowerKw} kW`
-  return `${adjusted.new_power_kW} kW (${adjusted.new_power_percent}%)`
+  const limitedText = adjusted.minimum_limited ? ' ขั้นต่ำ' : ''
+  const redistributedText = adjusted.redistributed_extra_kW > 0 ? ' กระจายเพิ่ม' : ''
+  return `${adjusted.new_power_kW} kW (${adjusted.new_power_percent}%)${limitedText}${redistributedText}`
+}
+
+function getControlLimitText(data) {
+  if (data.control_limited) {
+    return `ทุกตู้ถึงขั้นต่ำ ยังเกิน ${formatNumber(data.unmet_reduction_kW)} kW`
+  }
+
+  if (data.redistribution_applied) {
+    return `โยกไปตู้ใหญ่ ${formatNumber(data.redistribution_extra_kW)} kW`
+  }
+
+  return 'ลดได้ตามแผน'
 }
 
 function updateLoadChart(data) {
@@ -156,7 +217,7 @@ function updateLoadChart(data) {
   const baseLoadPercent = loadChart.data.datasets[0].data
   const evLoadPercent = loadChart.data.datasets[1].data
   const limitPercent = loadChart.data.datasets[2].data
-  const evPercent = data.transformer_kW ? (data.ev_load_kW / data.transformer_kW) * 100 : 0
+  const evPercent = data.transformer_kVA ? (data.ev_load_kVA / data.transformer_kVA) * 100 : 0
 
   labels.push(data.time)
   baseLoadPercent.push(data.base_load_percent)
@@ -278,5 +339,11 @@ function createLoadChart() {
 function formatNumber(value) {
   return Number(value || 0).toLocaleString('en-US', {
     maximumFractionDigits: 2,
+  })
+}
+
+function formatWholeNumber(value) {
+  return Number(value || 0).toLocaleString('en-US', {
+    maximumFractionDigits: 0,
   })
 }
