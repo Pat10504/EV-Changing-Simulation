@@ -11,6 +11,7 @@ let commandPending = false
 let timeSelectionPending = false
 let availableTimes = []
 let updatesSeen = 0
+let circuitSnapshot = null
 const shortcuts = { jump1230: '12:30', jump1835: '18:35', jump2055: '20:55' }
 
 for (const [key, storageKey] of Object.entries(STORAGE_KEYS)) {
@@ -21,6 +22,18 @@ ui.pauseButton.addEventListener('click', () => sendSimulationCommand('/api/simul
 ui.resetButton.addEventListener('click', () => sendSimulationCommand('/api/simulation/reset'))
 ui.startTime.addEventListener('change', () => { timeSelectionPending = true })
 ui.seekButton.addEventListener('click', seekSelectedTime)
+ui.openCircuitButton.addEventListener('click', async () => {
+  if (isSimulationRunning || !circuitSnapshot || commandPending) return
+  commandPending = true; updateControlAvailability()
+  try {
+    const response = await fetch('/api/circuit/experiments', { method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ charger_kw:50, time:circuitSnapshot.time, updated_at:circuitSnapshot.updatedAt }) })
+    const result = await response.json()
+    if (!response.ok) throw new Error(result.message)
+    window.location.assign(`/circuit?id=${encodeURIComponent(result.id)}`)
+  } catch (error) { showMessage(error.message) }
+  finally { commandPending = false; updateControlAvailability() }
+})
 for (const [id, time] of Object.entries(shortcuts)) {
   ui[id].addEventListener('click', () => {
     ui.startTime.value = time
@@ -135,6 +148,7 @@ async function sendSimulationCommand(url, body = {}) {
   }
 }
 function updateControlAvailability() {
+  ui.openCircuitButton.disabled = commandPending || isSimulationRunning || !circuitSnapshot?.charger_breakdown?.active_50kW?.active
   ui.playButton.disabled = commandPending || availableTimes.length === 0
   ui.pauseButton.disabled = !isSimulationRunning || commandPending
   ui.resetButton.disabled = commandPending
@@ -155,6 +169,8 @@ function showMessage(message, error = true) {
   ui.dashboardMessage.hidden = false
 }
 function renderSimulationUpdate(data) {
+  circuitSnapshot = data
+  updateControlAvailability()
   if (!timeSelectionPending && availableTimes.includes(data.time)) ui.startTime.value = data.time
   ui.timeSlot.textContent = data.time
   ui.recordProgress.textContent = `แถว ${data.index + 1} / ${data.totalRecords}`
@@ -258,6 +274,8 @@ function resetChart(redraw = true) {
   if (redraw) loadChart.update('none')
 }
 function resetDisplay() {
+  circuitSnapshot = null
+  updateControlAvailability()
   resetChart()
   for (const id of ['totalLoad','controlledLoad','baseLoad','evBudget','evLoad','initialReduction','initialRemaining','redistributedPower','adjustedEvLoad']) ui[id].textContent = '—'
   ui.timeSlot.textContent = '--:--'

@@ -23,6 +23,7 @@
         <a class="active" href="/dashboard">Dashboard</a>
         <a href="/upload">อัปโหลด CSV</a>
         <a href="/formulas">สูตรคำนวณ</a>
+        <a href="/circuit">ทดลองวงจร</a>
       </nav>
     </header>
 
@@ -79,6 +80,7 @@
     <section class="panel charger-panel">
       <div class="section-heading"><div><span class="eyebrow">รายละเอียดการจัดสรร</span><h2>กำลังชาร์จแยกตามขนาดตู้</h2></div><span id="activeCount" class="rule-chip">รอข้อมูล active</span></div>
       <p class="table-intro">อ่านจากซ้ายไปขวา: ความต้องการ → ผลลดเป็น % → ผลหลังใช้ขั้นต่ำ 12 kW กำลังที่แสดงเป็นค่าต่อตู้ active</p>
+      <div class="circuit-launch"><div><strong>จากการจัดสรร → ทดลองวงจรหนึ่งตู้</strong><p>เลือกเวลาและพักกราฟก่อน เปิดดูเงื่อนไขในหน้าถัดไป แล้วค่อยกดรัน MATLAB</p></div><button id="openCircuitButton" disabled>ทดลองตู้ 50 kW ใน MATLAB →</button></div>
       <div class="table-wrap"><table class="allocation-table">
         <thead><tr><th scope="col">พิกัดตู้</th><th scope="col">Active / ติดตั้ง</th><th scope="col">โหลดก่อน<br><small>kW รวมกลุ่ม</small></th><th scope="col">หลังลด % รอบแรก<br><small>kW/ตู้ ก่อนขั้นต่ำ</small></th><th scope="col">กำลังสุดท้าย<br><small>kW/ตู้</small></th><th scope="col">ลดไป</th><th scope="col">กำลังที่เหลือ</th><th scope="col">ผลการจัดสรร</th></tr></thead>
         <tbody id="chargerRows"><tr><td colspan="8" class="empty-state">กดเริ่มจำลองเพื่อดูผลจากข้อมูลโหลด</td></tr></tbody>

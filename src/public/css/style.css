@@ -1001,6 +1001,10 @@ tbody tr:hover {
 .energy-dashboard .metric .status-pill.warning { color: var(--warning); }
 
 /* Time navigation and chart readability. */
+.circuit-launch { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 20px; margin:16px 0; background:#eef5f3; border:1px solid #d9e8e2; border-radius:8px; font-size:12px; }
+.circuit-launch p { margin:6px 0 0; color:#6b7e81; font-size:11px; }
+.circuit-launch button { color:#23594d; background:white; border-color:#bfd8cd; white-space:nowrap; }
+@media(max-width:600px){.circuit-launch{align-items:flex-start;flex-direction:column}}
 .playback-state { display: inline-block; font-size: 10px; color: #62748a; padding: 3px 8px; border-radius: 4px; background: #eef2f7; margin-top: 4px; }
 .playback-state.playing { color: #08684a; background: #e2f4ec; }
 .time-navigation { display: flex; align-items: center; flex-wrap: wrap; gap: 16px 26px; padding: 15px 20px; margin: 12px 0 18px; border: 1px solid #dbe3ed; border-radius: 10px; background: #fff; }

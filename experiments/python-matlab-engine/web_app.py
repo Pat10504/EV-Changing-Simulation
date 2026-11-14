@@ -1,14 +1,9 @@
 from flask import Flask, render_template, request
 import matlab.engine
+from circuit_api import api, engine_lock, connect_engine, MODEL_FOLDER
 
 app = Flask(__name__)
-
-# เชื่อมกับ MATLAB ที่เปิดและแชร์ไว้
-eng = matlab.engine.connect_matlab("EVChargingLab")
-eng.cd(
-    "/Users/patkruadamrong/EESPU/ev-charging-simulation/experiments/python-matlab-engine/dc-fast-charger",
-    nargout=0,
-)
+app.register_blueprint(api)
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -33,9 +28,16 @@ def home():
                 raise ValueError("กรอกกระแสจำนวนเต็มตั้งแต่ 20 ถึง 100 A")
 
             # กำหนดค่า → รัน → รับผล เหมือนที่เราทดลองมาแล้ว
-            eng.workspace["target_current_A"] = target_current_A
-            eng.eval("manual_current_test", nargout=0)
-            result_A = eng.workspace["last_current_A"]
+            if not engine_lock.acquire(blocking=False):
+                raise ValueError("MATLAB กำลังทำงานอื่น กรุณารอให้เสร็จก่อน")
+            try:
+                eng = connect_engine()
+                eng.cd(str(MODEL_FOLDER), nargout=0)
+                eng.workspace["target_current_A"] = target_current_A
+                eng.eval("manual_current_test", nargout=0)
+                result_A = eng.workspace["last_current_A"]
+            finally:
+                engine_lock.release()
 
         except Exception as exc:
             error = f"การทดลองไม่สำเร็จ: {exc}"
@@ -54,5 +56,5 @@ if __name__ == "__main__":
         host="127.0.0.1",
         port=5050,
         debug=False,
-        threaded=False,
+        threaded=True,
     )
