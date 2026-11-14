@@ -1,14 +1,25 @@
 import {
   getSimulationState,
+  getAvailableTimes,
   pauseSimulation,
   resetSimulation,
   startSimulation,
+  seekSimulation,
 } from '../services/simulation.service.js'
 
 export async function start(req, res, next) {
   try {
     await startSimulation(req.body || {})
     res.json({ status: 'started' })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function seek(req, res, next) {
+  try {
+    const result = await seekSimulation(req.body || {})
+    res.json({ status: 'paused', time: result.time })
   } catch (err) {
     next(err)
   }
@@ -32,9 +43,10 @@ export function reset(_req, res, next) {
   }
 }
 
-export function state(_req, res, next) {
+export async function state(_req, res, next) {
   try {
-    res.json(getSimulationState())
+    const availableTimes = await getAvailableTimes()
+    res.json({ ...getSimulationState(), availableTimes })
   } catch (err) {
     next(err)
   }

@@ -17,7 +17,7 @@
 1. ผู้ใช้อัปโหลด CSV 2 ไฟล์ผ่านหน้าเว็บ: `chargers.csv` และ `load_pattern.csv`
 2. Frontend แสดง preview ข้อมูลทั้งหมดก่อนบันทึก
 3. Backend parse/validate CSV แล้วล้างข้อมูลเก่าและบันทึกข้อมูลใหม่ลง Supabase
-4. Dashboard กดเริ่มจำลอง แล้ว Backend อ่านข้อมูลจาก Supabase ทีละ record ตามเวลา
+4. Dashboard เลือกเวลาจากข้อมูล Supabase เพื่อดูผลและพัก หรือเริ่มจำลองต่อทีละ record ได้ทันที
 5. Backend คำนวณ Base load, EV load, Total load, สถานะระบบ และการลดกำลังต่อหัวแยกตามขนาดตู้
 6. Dashboard แสดงผล Realtime ผ่าน socket.io: metric cards, stacked chart และตารางกำลังตู้ชาร์จก่อน/หลังปรับ
 
@@ -32,7 +32,7 @@
 |---|---|---|
 | Runtime | Node.js / Express.js | ใช้ ES Module ทั้งโปรเจค |
 | Frontend | HTML / CSS / JavaScript | serve static ผ่าน Express |
-| Chart | Chart.js CDN | ใช้ stacked area chart |
+| Chart | Chart.js 4.6.1 ผ่าน npm | เสิร์ฟ local bundle; stacked area chart พร้อม tooltip/animation |
 | Realtime | socket.io | ส่ง `simulation:update` |
 | File Upload | multer | รับ CSV 2 ไฟล์ |
 | CSV Parse | csv-parse | parse + validate |
@@ -120,12 +120,16 @@ Upload CSV -> validate -> clear old rows -> insert Supabase -> Dashboard start -
 - Header ใช้ชื่อโครงงาน: `ระบบจำลองการจัดการพลังงานสำหรับสถานีชาร์จ EV`
 - แสดงโลโก้มหาวิทยาลัยศรีปทุม
 - แสดงรายชื่อนักศึกษาและอาจารย์ที่ปรึกษา
-- Control: transformer MVA, load limit, power factor, speed, start/pause/reset
+- Control: transformer MVA, load limit, power factor, speed, เลือกเวลา/ดูช่วงนี้, start/pause/reset
+- เลือกเวลาได้จากข้อมูลจริง ปุ่มดูช่วงนี้แสดงผลและพักทันที; เล่นต่อเดินจากแถวถัดไป มีปุ่มลัด 12:30 / 18:35 / 20:55 เมื่อมีข้อมูล
 - Metric: เวลา, โหลดรวมเป็น kVA, โหลดพื้นฐานเป็น kVA, สถานะระบบ
 - Chart: stacked area chart
   - Base load เป็นพื้นที่สีน้ำเงิน และ EV หลังควบคุมเป็นพื้นที่สีเขียวซ้อนด้านบน
-  - ผลรวมพื้นที่คือโหลดรวมหลังควบคุม เทียบกับเส้นสีเทาที่แสดงโหลดรวมก่อนควบคุม
+  - ผลรวมพื้นที่คือโหลดรวมหลังควบคุม เทียบกับเส้นสีม่วงที่แสดงโหลดรวมก่อนควบคุม
   - เส้น limit เป็นเส้นประสีแดง; ทุกชุดใช้ % ของพิกัดหม้อแปลง
+  - Tooltip แสดง % และ kVA พร้อมเส้นชี้เวลา; อัปเดตด้วย animation สั้นและคงเส้นตรงระหว่างข้อมูล
+  - เมื่อเลือกเวลา เติมกราฟก่อนหน้าด้วยค่าตั้งเดียวกัน การ์ด/ตารางแสดงเฉพาะเวลาปัจจุบัน
+  - รีเฟรชเว็บคืนผลล่าสุดจากเซิร์ฟเวอร์ได้ แต่ไม่เก็บตำแหน่งการเล่นข้ามการรีสตาร์ตเซิร์ฟเวอร์
 - การ์ดโหลดรวมก่อน/หลังควบคุม โหลดพื้นฐาน และงบ EV; แถบสถานะผลหลังควบคุมแยกจากสถานะก่อนควบคุม
 - ตารางแสดง active/ติดตั้ง โหลดก่อน ผลลด % รอบแรก กำลังสุดท้าย % ลดไป % เหลือ และเหตุผลที่ชนขั้นต่ำ/รับการลดเพิ่ม
 - สรุปงบและการกระจาย พร้อมข้อความเมื่อควบคุมไม่สำเร็จ ไม่มี PWM card
@@ -295,7 +299,7 @@ ev-charging-simulation/
 ├── .env                              # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 ├── .env.example
 ├── .gitignore
-├── test/                            # ทดสอบสูตรและการแสดงผล Dashboard
+├── test/                            # ทดสอบสูตร การเล่น/ข้ามเวลา และการแสดงผล Dashboard
 ├── supabase/
 │   └── schema.sql                    # SQL สำหรับสร้าง tables
 └── src/
@@ -322,7 +326,7 @@ ev-charging-simulation/
     │   ├── db.service.js             # Supabase CRUD
     │   ├── csv.service.js            # parse/validate CSV upload
     │   ├── calculation.service.js    # load/overload calculation
-    │   └── simulation.service.js     # realtime loop
+    │   └── simulation.service.js     # realtime loop, seek และประวัติกราฟ
     └── public/
         ├── upload.html
         ├── dashboard.html
@@ -375,7 +379,7 @@ ev-charging-simulation/
 ```bash
 npm install
 npm run p
-npm test # ทดสอบสูตรจัดสรรกำลังและกรณีขอบเขต
+npm test # ทดสอบสูตร กรณีขอบเขต การเลือกเวลา และ Dashboard
 ```
 
 เปิดเว็บ:
@@ -470,3 +474,16 @@ https://github.com/Pat10504/EV-Changing-Simulation.git
 - คงสมมติฐาน PF ร่วม, η = 1 และความต้องการเริ่มต้นเต็มพิกัดสำหรับทุกตู้ active ไม่มีข้อมูล SOC หรือการยอมรับกำลังของรถรายคัน
 - มี `npm test` ตรวจตัวอย่างที่คุยกัน การกระจายหลายขนาด กรณีไม่มี active โหลดพื้นฐานเกิน limit และขอบเขตขั้นต่ำ
 - ขอบเขต MATLAB/Python ยังเป็นการทดลองแยก ไม่มีการส่งค่า kW หรือ % ไปใส่กระแส A โดยตรง
+
+
+---
+
+## 16. เลือกเวลาจำลองและปรับกราฟ — 14 พฤศจิกายน 2026
+
+- ใช้ Chart.js 4.6.1 จาก npm ผ่าน `/vendor/chart.umd.js` แทน CDN; ปรับสี Tooltip และ animation โดยไม่เปลี่ยนสูตรจัดสรรหรือข้อมูล Supabase
+- `POST /api/simulation/start` รับ `start_time` เพิ่มได้; ไม่ส่งจะเล่นต่อแถวถัดไป และเมื่อครบวันวนกลับแถวแรก
+- `POST /api/simulation/seek` ต้องส่ง `start_time` ที่มีจริงในข้อมูล แสดงผลทันทีแล้วพัก; ตรวจรูปแบบ HH:MM และค่าตั้งก่อนเปลี่ยนสถานะ
+- `GET /api/simulation/state` คืน `availableTimes` และ `lastResult` พร้อม `chartHistory` เพื่อคืนหน้าจอหลังรีเฟรช
+- ประวัติกราฟคำนวณรายแถวจากข้อมูลด้วยค่า transformer/limit/PF ของรอบปัจจุบัน ไม่ใช่การจำลองวงจร MATLAB และไม่ต้องรอเล่นจาก 00:00
+- ปุ่มดูช่วงนี้ที่ 18:35 แล้วเล่นต่อจะไป 18:40; รีเซ็ตล้างผลและเริ่มใหม่ที่แถวแรก ตำแหน่งการเล่นอยู่ในหน่วยความจำเซิร์ฟเวอร์
+- ทดสอบเวลาเริ่ม/ข้าม/พัก/เล่นต่อ การเปลี่ยนค่าตั้ง ประวัติกราฟ ข้อมูลว่าง เวลาที่ไม่มีจริง และการยกเลิกคำสั่งที่กำลังรอข้อมูล

@@ -28,7 +28,7 @@
 
 
     <section class="panel simulation-toolbar" aria-label="ตั้งค่าการจำลอง">
-      <div class="toolbar-title"><span class="eyebrow">การจำลองรายช่วงเวลา</span><div class="clock"><strong id="timeSlot">--:--</strong><span id="recordProgress">ยังไม่มีผลคำนวณ</span></div></div>
+      <div class="toolbar-title"><span class="eyebrow">การจำลองรายช่วงเวลา</span><div class="clock"><strong id="timeSlot">--:--</strong><span id="recordProgress">ยังไม่มีผลคำนวณ</span></div><span id="playbackState" class="playback-state">พร้อมเริ่ม</span></div>
       <div class="controls">
         <div class="field"><label for="transformerMva">หม้อแปลง (MVA)</label><input id="transformerMva" type="number" required min="1" step="1" value="50"></div>
         <div class="field"><label for="limitPercent">ขีดจำกัดโหลด (%)</label><input id="limitPercent" type="number" required min="1" max="100" value="80"></div>
@@ -36,6 +36,12 @@
         <div class="field"><label for="speed">แสดง 1 แถวทุก</label><select id="speed"><option value="2000">2 วินาที</option><option value="1000">1 วินาที</option><option value="400">0.4 วินาที</option></select></div>
       </div>
       <div class="run-controls"><button id="playButton" class="primary">เริ่มจำลอง</button><button id="pauseButton" disabled>พัก</button><button id="resetButton">รีเซ็ต</button><span id="connectionState" class="connection-label" role="status">กำลังเชื่อมต่อ…</span></div>
+    </section>
+
+    <section class="time-navigation" aria-label="เลือกเวลาจำลอง">
+      <div class="time-picker"><label for="startTime">เลือกเวลา</label><select id="startTime" disabled><option value="">กำลังโหลดเวลา…</option></select><button id="seekButton" disabled>ดูช่วงนี้</button></div>
+      <div class="time-shortcuts"><span>ไปยัง</span><button id="jump1230" disabled>12:30</button><button id="jump1835" disabled>18:35</button><button id="jump2055" disabled>20:55</button></div>
+      <span class="time-help">ดูช่วงนี้เพื่อพักอ่านผล แล้วกดเล่นต่อจากเวลานั้น</span>
     </section>
 
     <div id="dashboardMessage" class="dashboard-message" role="alert" hidden></div>
@@ -53,9 +59,9 @@
 
     <section class="grid analysis-layout">
       <article class="panel chart-panel">
-        <div class="section-heading"><div><span class="eyebrow">ภาพรวมของวัน</span><h2>โหลดก่อนและหลังควบคุม</h2></div><span class="small">% ของพิกัดหม้อแปลง</span></div>
+        <div class="section-heading"><div><span class="eyebrow">ภาพรวมของวัน</span><h2>โหลดก่อนและหลังควบคุม</h2></div><span id="chartRange" class="chart-range">% ของพิกัดหม้อแปลง</span></div>
         <div class="chart-box"><canvas id="loadChart" aria-label="กราฟโหลดพื้นฐาน โหลด EV หลังควบคุม โหลดรวมก่อนควบคุม และขีดจำกัด" role="img"></canvas></div>
-        <p class="chart-caption">พื้นที่ซ้อน = โหลดรวมหลังควบคุม · เส้นสีเทา = ก่อนควบคุม · เส้นประสีแดง = ขีดจำกัดที่ตั้งไว้</p>
+        <p class="chart-caption">พื้นที่น้ำเงิน + เขียว = โหลดรวมหลังควบคุม · เส้นสีม่วง = ก่อนควบคุม · เส้นประสีแดง = ขีดจำกัด</p><p class="chart-hint">ชี้กราฟเพื่ออ่านค่าเวลาอื่น · การ์ดและตารางแสดงเวลาจำลองปัจจุบัน · เมื่อเลือกเวลา กราฟก่อนหน้าคำนวณจากข้อมูลด้วยค่าตั้งเดียวกัน</p>
       </article>
       <aside class="panel allocation-summary">
         <span class="eyebrow">วิธีจัดสรรในช่วงเวลานี้</span><h2>จากงบรวม → กำลังต่อตู้</h2>
@@ -86,7 +92,7 @@
     </section>
 
   </main>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="/vendor/chart.umd.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/dashboard.js"></script>
 </body>

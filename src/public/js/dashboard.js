@@ -1,11 +1,16 @@
 const STORAGE_KEYS = { transformerMva: 'transformerMva', limitPercent: 'limitPercent', powerFactor: 'powerFactor' }
 const ui = Object.fromEntries([...document.querySelectorAll('[id]')].map(element => [element.id, element]))
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+let chartRows = []
 const loadChart = createLoadChart()
 const socket = io()
 let isSimulationRunning = false
 let lastIndex = -1
 let commandPending = false
-let lastSettingsKey = null
+let timeSelectionPending = false
+let availableTimes = []
+let updatesSeen = 0
+const shortcuts = { jump1230: '12:30', jump1835: '18:35', jump2055: '20:55' }
 
 for (const [key, storageKey] of Object.entries(STORAGE_KEYS)) {
   ui[key].value = localStorage.getItem(storageKey) || ui[key].value
@@ -13,30 +18,27 @@ for (const [key, storageKey] of Object.entries(STORAGE_KEYS)) {
 ui.playButton.addEventListener('click', startSimulation)
 ui.pauseButton.addEventListener('click', () => sendSimulationCommand('/api/simulation/pause'))
 ui.resetButton.addEventListener('click', () => sendSimulationCommand('/api/simulation/reset'))
+ui.startTime.addEventListener('change', () => { timeSelectionPending = true })
+ui.seekButton.addEventListener('click', seekSelectedTime)
+for (const [id, time] of Object.entries(shortcuts)) {
+  ui[id].addEventListener('click', () => {
+    ui.startTime.value = time
+    timeSelectionPending = true
+    return seekSelectedTime()
+  })
+}
 for (const id of ['transformerMva', 'limitPercent', 'powerFactor', 'speed']) {
   ui[id].addEventListener('change', () => {
     if (!validateSettings()) return
     saveSettings()
     if (isSimulationRunning) startSimulation()
-    else showMessage('ค่าที่เปลี่ยนจะใช้เมื่อกดเริ่มจำลอง ผลที่แสดงอยู่เป็นผลของการตั้งค่ารอบก่อน', false)
+    else showMessage('ค่าที่เปลี่ยนจะใช้เมื่อกดดูช่วงนี้หรือเล่นต่อ ผลที่แสดงอยู่เป็นผลของการตั้งค่ารอบก่อน', false)
   })
 }
-socket.on('connect', async () => {
+socket.on('connect', () => {
   ui.connectionState.textContent = '● เชื่อมต่อแล้ว'
   ui.connectionState.className = 'connection-label connected'
-  try {
-    const response = await fetch('/api/simulation/state')
-    if (!response.ok) throw new Error('อ่านสถานะการจำลองไม่สำเร็จ')
-    const state = await response.json()
-    setRunning(state.running)
-    if (state.running) {
-      ui.transformerMva.value = state.config.transformer_mva
-      ui.limitPercent.value = state.config.limit_percent
-      ui.powerFactor.value = state.config.power_factor
-      ui.speed.value = state.intervalMs
-    }
-    if (!state.totalRecords) showMessage('ยังไม่มีข้อมูลโหลดพร้อมจำลอง กรุณาตรวจข้อมูลที่หน้าอัปโหลด CSV', false)
-  } catch (error) { showMessage(error.message) }
+  return refreshState()
 })
 socket.on('disconnect', () => {
   ui.connectionState.textContent = '● ขาดการเชื่อมต่อ'
@@ -44,14 +46,42 @@ socket.on('disconnect', () => {
   setRunning(false)
 })
 socket.on('simulation:update', data => {
-  setRunning(true)
+  updatesSeen++
+  setRunning(data.running ?? true)
   renderSimulationUpdate(data)
 })
 socket.on('simulation:state', state => {
+  updatesSeen++
   setRunning(state.status === 'running')
   if (state.status === 'reset') resetDisplay()
+  if (state.status === 'dataset_changed') { resetDisplay(); return refreshState() }
 })
-
+async function refreshState() {
+  const seen = updatesSeen
+  try {
+    const response = await fetch('/api/simulation/state')
+    if (!response.ok) throw new Error('อ่านสถานะการจำลองไม่สำเร็จ')
+    const state = await response.json()
+    const selected = ui.startTime.value
+    availableTimes = (state.availableTimes || []).filter(time => /^([01]\d|2[0-3]):[0-5]\d$/.test(time))
+    ui.startTime.innerHTML = availableTimes.length
+      ? availableTimes.map(time => `<option value="${time}">${time}</option>`).join('')
+      : '<option value="">ไม่มีข้อมูลเวลา</option>'
+    ui.startTime.value = availableTimes.includes(selected) ? selected : availableTimes[0] || ''
+    if (seen === updatesSeen) {
+      setRunning(state.running)
+      if (state.lastResult || state.running) {
+        ui.transformerMva.value = state.config.transformer_mva
+        ui.limitPercent.value = state.config.limit_percent
+        ui.powerFactor.value = state.config.power_factor
+        if (['400', '1000', '2000'].includes(String(state.intervalMs))) ui.speed.value = state.intervalMs
+        if (state.lastResult) renderSimulationUpdate(state.lastResult)
+      } else if (lastIndex >= 0) resetDisplay()
+    }
+    if (!availableTimes.length) showMessage('ยังไม่มีข้อมูลโหลดพร้อมจำลอง กรุณาตรวจข้อมูลที่หน้าอัปโหลด CSV', false)
+    updateControlAvailability()
+  } catch (error) { showMessage(error.message) }
+}
 function validateSettings() {
   for (const id of ['transformerMva', 'limitPercent', 'powerFactor']) {
     if (!ui[id].reportValidity()) return false
@@ -61,26 +91,32 @@ function validateSettings() {
 function saveSettings() {
   for (const [key, storageKey] of Object.entries(STORAGE_KEYS)) localStorage.setItem(storageKey, ui[key].value)
 }
+function simulationOptions() {
+  return { transformer_mva: Number(ui.transformerMva.value), limit_percent: Number(ui.limitPercent.value),
+    power_factor: Number(ui.powerFactor.value), interval_ms: Number(ui.speed.value) }
+}
 async function startSimulation() {
   if (!validateSettings() || commandPending) return
   saveSettings()
-  const settingsKey = JSON.stringify([ui.transformerMva.value, ui.limitPercent.value, ui.powerFactor.value])
-  const ok = await sendSimulationCommand('/api/simulation/start', {
-    transformer_mva: Number(ui.transformerMva.value), limit_percent: Number(ui.limitPercent.value),
-    power_factor: Number(ui.powerFactor.value), interval_ms: Number(ui.speed.value),
-  })
-  if (ok) {
-    if (lastSettingsKey !== settingsKey) resetChart()
-    lastSettingsKey = settingsKey
+  const body = simulationOptions()
+  if ((timeSelectionPending || lastIndex < 0) && ui.startTime.value) body.start_time = ui.startTime.value
+  if (await sendSimulationCommand('/api/simulation/start', body)) {
+    timeSelectionPending = false
     setRunning(true)
+  }
+}
+async function seekSelectedTime() {
+  if (!validateSettings() || commandPending || !ui.startTime.value) return
+  saveSettings()
+  if (await sendSimulationCommand('/api/simulation/seek', { ...simulationOptions(), start_time: ui.startTime.value })) {
+    timeSelectionPending = false
+    setRunning(false)
   }
 }
 async function sendSimulationCommand(url, body = {}) {
   if (commandPending) return false
   commandPending = true
-  ui.playButton.disabled = true
-  ui.pauseButton.disabled = true
-  ui.resetButton.disabled = true
+  updateControlAvailability()
   try {
     const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const data = await res.json()
@@ -94,15 +130,23 @@ async function sendSimulationCommand(url, body = {}) {
     return false
   } finally {
     commandPending = false
-    ui.playButton.disabled = false
-    ui.pauseButton.disabled = !isSimulationRunning
-    ui.resetButton.disabled = false
+    updateControlAvailability()
   }
+}
+function updateControlAvailability() {
+  ui.playButton.disabled = commandPending || availableTimes.length === 0
+  ui.pauseButton.disabled = !isSimulationRunning || commandPending
+  ui.resetButton.disabled = commandPending
+  ui.seekButton.disabled = commandPending || availableTimes.length === 0
+  ui.startTime.disabled = commandPending || availableTimes.length === 0
+  for (const [id, time] of Object.entries(shortcuts)) ui[id].disabled = commandPending || !availableTimes.includes(time)
 }
 function setRunning(running) {
   isSimulationRunning = running
   ui.playButton.textContent = running ? 'กำลังจำลอง' : 'เริ่ม / เล่นต่อ'
-  ui.pauseButton.disabled = !running || commandPending
+  ui.playbackState.textContent = running ? 'กำลังเล่น' : 'พักอยู่'
+  ui.playbackState.className = `playback-state${running ? ' playing' : ''}`
+  updateControlAvailability()
 }
 function showMessage(message, error = true) {
   ui.dashboardMessage.textContent = message
@@ -110,6 +154,7 @@ function showMessage(message, error = true) {
   ui.dashboardMessage.hidden = false
 }
 function renderSimulationUpdate(data) {
+  if (!timeSelectionPending && availableTimes.includes(data.time)) ui.startTime.value = data.time
   ui.timeSlot.textContent = data.time
   ui.recordProgress.textContent = `แถว ${data.index + 1} / ${data.totalRecords}`
   ui.totalLoad.textContent = `${formatNumber(data.total_load_kVA)} kVA`
@@ -169,23 +214,36 @@ function renderChargerTable(data) {
       <td><span class="allocation-tag ${noteClass}">${note}</span></td></tr>`
   }).join('')
 }
-function updateLoadChart(data) {
-  if (data.index <= lastIndex) resetChart()
-  lastIndex = data.index
+function appendChartRow(data) {
+  chartRows.push(data)
   loadChart.data.labels.push(data.time)
-  const values = [data.base_load_percent, data.adjusted_ev_load_kVA / data.transformer_kVA * 100, data.total_load_percent, data.load_limit_kVA / data.transformer_kVA * 100]
+  const values = [data.base_load_percent, data.adjusted_ev_load_kVA / data.transformer_kVA * 100,
+    data.total_load_percent, data.load_limit_kVA / data.transformer_kVA * 100]
   loadChart.data.datasets.forEach((dataset, i) => dataset.data.push(values[i]))
-  if (loadChart.data.labels.length > 288) {
+}
+function updateLoadChart(data) {
+  const history = data.chartHistory
+  if (Array.isArray(history)) {
+    resetChart(false)
+    history.forEach(appendChartRow)
+  } else if (data.index <= lastIndex) resetChart(false)
+  lastIndex = data.index
+  appendChartRow(data)
+  while (loadChart.data.labels.length > 288) {
+    chartRows.shift()
     loadChart.data.labels.shift()
     loadChart.data.datasets.forEach(dataset => dataset.data.shift())
   }
-  loadChart.update('none')
+  ui.chartRange.textContent = `${loadChart.data.labels[0]} – ${data.time} · % พิกัด`
+  // Bulk history appears immediately; live updates animate for less than one tick.
+  loadChart.update(Array.isArray(history) || reducedMotion ? 'none' : undefined)
 }
-function resetChart() {
+function resetChart(redraw = true) {
   lastIndex = -1
+  chartRows = []
   loadChart.data.labels = []
   loadChart.data.datasets.forEach(dataset => { dataset.data = [] })
-  loadChart.update('none')
+  if (redraw) loadChart.update('none')
 }
 function resetDisplay() {
   resetChart()
@@ -199,27 +257,79 @@ function resetDisplay() {
   ui.controlledMeter.style.width = '0%'
   ui.controlOutcome.className = 'control-outcome waiting'
   ui.controlTitle.textContent = 'พร้อมเริ่มจำลอง'
-  ui.controlDescription.textContent = 'กดเริ่มเพื่อจำลองจากแถวแรกของตารางโหลด'
+  ui.controlDescription.textContent = 'เลือกเวลาแล้วกดดูช่วงนี้ หรือกดเริ่มเพื่อเล่นจากแถวแรก'
+  ui.chartRange.textContent = '% ของพิกัดหม้อแปลง'
+  ui.startTime.value = availableTimes[0] || ''
+  timeSelectionPending = false
   ui.activeCount.textContent = 'รอข้อมูล active'
   ui.allocationNote.textContent = 'ถ้าผลรอบแรกต่ำกว่า 12 kW จะตรึงที่ขั้นต่ำ แล้วคำนวณสัดส่วนใหม่ให้ตู้กลุ่มที่เหลือ'
   ui.chargerRows.innerHTML = '<tr><td colspan="8" class="empty-state">กดเริ่มจำลองเพื่อดูผลจากข้อมูลโหลด</td></tr>'
 }
 function createLoadChart() {
+  const guide = {
+    id: 'timeGuide',
+    afterDatasetsDraw(chart) {
+      const point = chart.tooltip?.getActiveElements()?.[0]?.element
+      if (!point) return
+      const { ctx, chartArea } = chart
+      ctx.save()
+      ctx.beginPath()
+      ctx.setLineDash([3, 4])
+      ctx.strokeStyle = '#64748b'
+      ctx.lineWidth = 1
+      ctx.moveTo(point.x, chartArea.top)
+      ctx.lineTo(point.x, chartArea.bottom)
+      ctx.stroke()
+      ctx.restore()
+    },
+  }
   return new Chart(ui.loadChart, {
-    type: 'line',
+    type: 'line', plugins: [guide],
     data: { labels: [], datasets: [
-      { label: 'โหลดพื้นฐาน', data: [], borderColor: '#5e87b5', backgroundColor: 'rgba(94,135,181,.20)', fill: 'origin', stack: 'controlled' },
-      { label: 'EV หลังควบคุม', data: [], borderColor: '#157b6b', backgroundColor: 'rgba(21,123,107,.23)', fill: '-1', stack: 'controlled' },
-      { label: 'รวมก่อนควบคุม', data: [], borderColor: '#707b8a', borderDash: [3,3], fill: false, stack: 'before' },
-      { label: 'ขีดจำกัด', data: [], borderColor: '#bd4538', borderDash: [7,5], fill: false, stack: 'limit' },
+      { label: 'โหลดพื้นฐาน', data: [], borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.20)', fill: 'origin', stack: 'controlled' },
+      { label: 'EV หลังควบคุม', data: [], borderColor: '#059669', backgroundColor: 'rgba(5,150,105,.25)', fill: '-1', stack: 'controlled' },
+      { label: 'รวมก่อนควบคุม', data: [], borderColor: '#7c3aed', backgroundColor: '#7c3aed', borderDash: [4,3], fill: false, stack: 'before' },
+      { label: 'ขีดจำกัด', data: [], borderColor: '#dc2626', backgroundColor: '#dc2626', borderDash: [8,5], fill: false, stack: 'limit', pointRadius: 0, pointHoverRadius: 0 },
     ] },
     options: {
-      maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
-      elements: { line: { borderWidth: 2, tension: 0 }, point: { radius: 0, hitRadius: 10 } },
-      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 18, color: '#586779' } }, tooltip: { callbacks: { label: context => `${context.dataset.label}: ${formatNumber(context.raw)}%` } } },
+      maintainAspectRatio: false, normalized: true,
+      animation: reducedMotion ? false : { duration: 220, easing: 'easeOutQuart' },
+      interaction: { mode: 'index', axis: 'x', intersect: false },
+      // Straight segments preserve the sampled values without inventing peaks.
+      elements: { line: { borderWidth: 2.5, tension: 0 }, point: {
+        radius: context => context.dataIndex === context.dataset.data.length - 1 ? 3 : 0,
+        hoverRadius: 5, hitRadius: 12, borderWidth: 2, hoverBorderWidth: 2,
+      } },
+      plugins: {
+        legend: { position: 'bottom', onClick() {}, labels: {
+          boxWidth: 22, boxHeight: 9, padding: 18, color: '#334155',
+          font: { size: 11, family: 'system-ui, sans-serif' },
+        } },
+        tooltip: {
+          backgroundColor: '#ffffff', titleColor: '#0f172a', bodyColor: '#334155', footerColor: '#047857',
+          borderColor: '#d7e0eb', borderWidth: 1, cornerRadius: 10, padding: 14,
+          titleMarginBottom: 10, bodySpacing: 8, footerMarginTop: 10, boxPadding: 5,
+          titleFont: { size: 13, weight: 'bold', family: 'system-ui, sans-serif' },
+          bodyFont: { size: 12, family: 'system-ui, sans-serif' },
+          footerFont: { size: 12, weight: 'bold', family: 'system-ui, sans-serif' },
+          callbacks: {
+            title: items => `ค่าบนกราฟเวลา ${items[0]?.label || ''}`,
+            label: context => {
+              const kva = context.raw / 100 * (chartRows[context.dataIndex]?.transformer_kVA || 0)
+              return ` ${context.dataset.label}: ${formatNumber(context.raw)}% · ${formatNumber(kva)} kVA`
+            },
+            footer: items => {
+              const row = chartRows[items[0]?.dataIndex]
+              if (!row) return ''
+              const total = row.base_load_percent + row.adjusted_ev_load_kVA / row.transformer_kVA * 100
+              return `รวมหลังควบคุม: ${formatNumber(total)}%`
+            },
+          },
+        },
+      },
       scales: {
-        x: { grid: { display: false }, ticks: { color: '#657182', maxTicksLimit: 8 } },
-        y: { min: 0, suggestedMax: 110, stacked: true, grid: { color: '#edf1f5' }, ticks: { color: '#657182', callback: value => `${value}%` } },
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#64748b', maxTicksLimit: 8, maxRotation: 0, autoSkip: true } },
+        y: { min: 0, suggestedMax: 110, stacked: true, border: { display: false }, grid: { color: '#e8eef5' }, ticks: { color: '#64748b', padding: 10, callback: value => `${value}%` } },
       },
     },
   })

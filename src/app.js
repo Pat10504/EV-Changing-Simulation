@@ -16,6 +16,7 @@ app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(paths.publicDir));
+app.get('/vendor/chart.umd.js', (_req, res) => res.sendFile(paths.chartBundle));
 
 app.use(pageRouter);
 app.use('/api', apiRouter);
