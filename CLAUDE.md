@@ -11,18 +11,18 @@
 เมื่อมีรถ EV เข้ามาชาร์จพร้อมกันจำนวนมาก โหลดรวมของสถานีชาร์จอาจทำให้หม้อแปลงไฟฟ้ากำลังรับภาระเกินขีดจำกัด เกิดภาวะ Overload และเสี่ยงต่อการจ่ายไฟไม่เสถียรหรือความเสียหายของหม้อแปลง
 
 ### แนวทางของระบบ
-ระบบจำลอง Energy Management สำหรับสถานีชาร์จ EV จะอ่านข้อมูลโหลดรายช่วงเวลา ตรวจสอบภาระรวมของหม้อแปลง และเมื่อเกิด Overload จะคำนวณการลดกำลังชาร์จของตู้ที่กำลังใช้งาน พร้อมแปลงเป็นค่า PWM สำหรับแสดงผลบน Dashboard แบบ Realtime
+ระบบจำลอง Energy Management สำหรับหลายสถานีชาร์จ EV ในพื้นที่ที่ใช้หม้อแปลงใหญ่ร่วมกัน จะอ่านข้อมูลโหลดรายช่วงเวลา ตรวจสอบภาระรวมของหม้อแปลง และเมื่อเกิด Overload จะคำนวณการลดกำลังชาร์จของตู้ที่กำลังใช้งาน พร้อมแสดงกำลังต่อหัวและเปอร์เซ็นต์กำลังที่เหลือของแต่ละขนาดตู้บน Dashboard แบบ Realtime
 
 ### สิ่งที่ระบบทำใน Phase ปัจจุบัน
 1. ผู้ใช้อัปโหลด CSV 2 ไฟล์ผ่านหน้าเว็บ: `chargers.csv` และ `load_pattern.csv`
 2. Frontend แสดง preview ข้อมูลทั้งหมดก่อนบันทึก
 3. Backend parse/validate CSV แล้วล้างข้อมูลเก่าและบันทึกข้อมูลใหม่ลง Supabase
 4. Dashboard กดเริ่มจำลอง แล้ว Backend อ่านข้อมูลจาก Supabase ทีละ record ตามเวลา
-5. Backend คำนวณ Base load, EV load, Total load, สถานะระบบ, การลดกำลัง และ PWM
-6. Dashboard แสดงผล Realtime ผ่าน socket.io: metric cards, stacked chart, ตารางตู้ชาร์จ, ค่า PWM
+5. Backend คำนวณ Base load, EV load, Total load, สถานะระบบ และการลดกำลังต่อหัวแยกตามขนาดตู้
+6. Dashboard แสดงผล Realtime ผ่าน socket.io: metric cards, stacked chart และตารางกำลังตู้ชาร์จก่อน/หลังปรับ
 
 ### Phase ถัดไป
-เชื่อมต่อ ESP32 ผ่าน Wi-Fi เพื่อดึงค่าล่าสุดจาก Backend แล้วแสดงสถานะโหลดและค่า PWM บนจอ LCD 16x2 I2C สำหรับ demo ให้อาจารย์ดู รายละเอียดอยู่ใน `HARDWARE.md`
+วิเคราะห์การจัดสรรกำลังต่อขนาดตู้และสำรวจวงจร MATLAB ก่อนเชื่อมค่าเป้าหมายจาก Dashboard ไปจำลองวงจร ยุติการใช้งาน PWM/ESP32 ตั้งแต่ 14 พฤศจิกายน 2026; `HARDWARE.md` และโฟลเดอร์ `hardware/` เป็นประวัติการทดลองเดิม
 
 ---
 
@@ -38,13 +38,13 @@
 | CSV Parse | csv-parse | parse + validate |
 | Database | Supabase PostgreSQL | ใช้ service role key เฉพาะ backend |
 | Dev tools | nodemon, morgan | `npm run p` สำหรับ dev |
-| Hardware demo | ESP32 DevKit + LCD 16x2 I2C | ใช้ Wi-Fi ดึงข้อมูลจาก backend ผ่าน HTTP polling |
+| Circuit experiment | MATLAB/Simulink + Python/Flask | ทดลองแยกแบบ local; ยังไม่เชื่อม Dashboard หลัก |
 
 ---
 
 ## 3. CSV Design ที่ใช้จริง
 
-โปรเจคนี้ใช้วิธีให้ผู้ใช้มีไฟล์ CSV ในเครื่อง แล้วอัปโหลดผ่านหน้าเว็บ ไม่เก็บไฟล์ CSV ไว้ใน repo
+โปรเจคนี้ให้ผู้ใช้เก็บไฟล์ CSV ข้อมูลใช้งานจริงนอก repo แล้วอัปโหลดผ่านหน้าเว็บ ส่วน `src/public/templates/` เก็บ template สำหรับดาวน์โหลด ไม่ใช่ข้อมูล fallback
 
 ### ไฟล์ 1: `chargers.csv`
 ทะเบียนจำนวนตู้ชาร์จตามขนาดกำลัง
@@ -123,18 +123,18 @@ Upload CSV -> validate -> clear old rows -> insert Supabase -> Dashboard start -
 - Control: transformer MVA, load limit, power factor, speed, start/pause/reset
 - Metric: เวลา, โหลดรวมเป็น kVA, โหลดพื้นฐานเป็น kVA, สถานะระบบ
 - Chart: stacked area chart
-  - Base load เป็นพื้นที่สีน้ำเงิน
-  - EV load เป็นพื้นที่สีแดงที่ต่อขึ้นจาก base load
-  - เส้น limit เป็นเส้นประสีแดง
-  - ไม่มีเส้นโหลดรวมแยก เพราะพื้นที่ซ้อนกันแสดงโหลดรวมโดยธรรมชาติแล้ว
-- PWM card แสดง PWM, voltage, simulated kW
-- ตารางโหลดตู้ชาร์จแยกตามประเภท
+  - Base load เป็นพื้นที่สีน้ำเงิน และ EV หลังควบคุมเป็นพื้นที่สีเขียวซ้อนด้านบน
+  - ผลรวมพื้นที่คือโหลดรวมหลังควบคุม เทียบกับเส้นสีเทาที่แสดงโหลดรวมก่อนควบคุม
+  - เส้น limit เป็นเส้นประสีแดง; ทุกชุดใช้ % ของพิกัดหม้อแปลง
+- การ์ดโหลดรวมก่อน/หลังควบคุม โหลดพื้นฐาน และงบ EV; แถบสถานะผลหลังควบคุมแยกจากสถานะก่อนควบคุม
+- ตารางแสดง active/ติดตั้ง โหลดก่อน ผลลด % รอบแรก กำลังสุดท้าย % ลดไป % เหลือ และเหตุผลที่ชนขั้นต่ำ/รับการลดเพิ่ม
+- สรุปงบและการกระจาย พร้อมข้อความเมื่อควบคุมไม่สำเร็จ ไม่มี PWM card
 
 ### หน้า `formulas.html`
 - อธิบายสูตร P, Q, S และ Power Factor
 - อธิบายการแปลง EV load จาก kW เป็น kVA
 - อธิบายการตรวจ Overload ของหม้อแปลงด้วย apparent power
-- อธิบายการลดกำลังและ PWM simulation
+- อธิบายการลดกำลังต่อหัวและเปอร์เซ็นต์กำลังที่เหลือ
 
 ---
 
@@ -214,48 +214,71 @@ else -> NORMAL
 - `OVERLOAD` อ้างอิงจาก limit ที่ผู้ใช้ตั้ง ไม่ hard-code ที่ 80 เสมอ
 - `WARNING` ใช้ 70% เป็นเกณฑ์แจ้งเตือนล่วงหน้า
 
-### การลดกำลังเมื่อ Overload
-เมื่อโหลดรวมเกินขีดจำกัด ระบบจะคำนวณกำลังที่ต้องลดรวม:
+### การลดกำลังเมื่อ Overload — สัดส่วนเดียวกันและขั้นต่ำ 12 kW
+
+ขั้นแรกคำนวณงบ EV จากส่วนที่เหลือของขีดจำกัดหม้อแปลง ภายใต้สมมติฐาน PF ร่วมและยังไม่คิดการสูญเสียตู้ (η = 1):
 
 ```text
-over_limit_kVA = total_S_kVA - load_limit_kVA
-over_limit_kW = over_limit_kVA x power_factor
-total_active_chargers = sum(active ทุกขนาด)
-reduce_per_charger_kW = over_limit_kW / total_active_chargers
+B = max(0, (load_limit_kVA - base_load_kVA) × PF)   # kW ที่จัดสรรให้ EV ได้
+D = Σ(active_i × rated_i)                          # ความต้องการก่อนควบคุม
+r0 = min(1, B / D)                                # ถ้า D = 0 ใช้ r0 = 1
+initial_remaining_percent = 100 × r0
+initial_reduction_percent = 100 × (1 - r0)
+proportional_power_i = rated_i × r0                # ผลรอบแรก ยังไม่ใช้ขั้นต่ำ
 ```
 
-จากนั้นลดกำลังของตู้แต่ละขนาดเท่ากันเป็น kW ต่อหัว:
+1. ลดทุกขนาดเป็นเปอร์เซ็นต์เท่ากันในรอบแรก โดยถ้าไม่เกินงบจะจ่ายตามพิกัด
+2. ถ้ากลุ่มใดคำนวณได้ต่ำกว่า 12 kW/ตู้ ให้ตรึงกลุ่มนั้นที่ 12 kW แล้วหักกำลังรวมของกลุ่มออกจากงบ
+3. ใช้งบที่เหลือคำนวณสัดส่วนใหม่เฉพาะกลุ่มที่ยังลดได้: `r = remaining_budget / Σ(active_i × rated_i)`
+4. ทำซ้ำจนไม่มีตู้กลุ่มใหม่ชนขั้นต่ำ การกระจายรอบถัดไปยังอิงสัดส่วนพิกัด ไม่ใช่ลบ kW เท่ากันทุกตู้
+5. ถ้างบไม่พอแม้ทุกตู้จ่ายขั้นต่ำ ให้คงขั้นต่ำและรายงาน `control_limited = true` พร้อมกำลังที่ยังลดไม่ได้ ระบบไม่เปลี่ยน active หรือสั่งพักตู้เอง
+
+เมื่อจัดสรรได้ ผลเทียบเท่ากับ `power_i = max(12, r × rated_i)` โดยเลือก r ให้ผลรวมไม่เกิน B และไม่เกินพิกัดตู้ หาก B มากกว่าความต้องการจะใช้กำลังตามพิกัด ไม่ใช้ B จนหมด
 
 ```text
-min_charger_power_kW = 20
-new_power_kW = max(min_charger_power_kW, original_power_kW - reduce_per_charger_kW)
-new_power_percent = (new_power_kW / original_power_kW) x 100
+all_active_minimum_kW = Σ(active_i × 12)
+ถ้า B < all_active_minimum_kW → ไม่สามารถรักษาทั้งขั้นต่ำและขีดจำกัดได้
+remaining_percent_i = power_i / rated_i × 100
+reduction_percent_i = 100 - remaining_percent_i
 ```
 
 ข้อควรรู้:
-- วิธีนี้เป็น equal kW reduction ต่อ active charger
-- ตู้ EV Charger ที่ยังเปิดชาร์จต้องไม่ถูกลดต่ำกว่า 20 kW เพราะต่ำกว่านี้ถือว่าไฟไม่เข้ารถในโมเดล demo
-- ถ้าตู้ขนาดเล็กชนขั้นต่ำ 20 kW ก่อน ระบบจะกระจายส่วนที่ลดไม่ได้ไปยังตู้ขนาดใหญ่ที่ยังมี headroom ต่อ
-- ถ้าลดจนทุกตู้ถึงขั้นต่ำ 20 kW แล้วยังไม่พอ ระบบจึงรายงาน `control_limited` และส่วนที่ยังลดไม่ได้ (`unmet_reduction_kW`)
-- เป็นโมเดลจำลองที่เข้าใจง่าย ไม่ใช่ optimal load allocation
-- ในอนาคตอาจปรับเป็น proportional reduction ตามขนาดตู้, priority-based control หรือแยก PF ของโหลดแต่ละประเภทได้
+- ขั้นต่ำ 12 kW เป็นกติกาการทดลองที่ตกลงกัน ไม่ใช่มาตรฐานขั้นต่ำสากลของรถหรือตู้ทุกยี่ห้อ
+- ข้อมูลช่วงพีกตั้งใจให้ผลรอบแรกต่ำกว่า 12 kW ได้ เพื่อทดสอบการตรึงขั้นต่ำและการกระจายกำลัง
+- เมื่อมีตู้ชนขั้นต่ำ เปอร์เซ็นต์ที่ลดสุดท้ายของแต่ละขนาดจะต่างกัน
+- ตู้ active = 0 ไม่ร่วมจัดสรร กำลังรวมและกำลังที่จัดสรรเป็น 0; UI แสดงขีดแทนกำลังต่อตู้
+- สำหรับข้อมูลที่มีพิกัดต่ำกว่า 12 kW ระบบจำกัดขั้นต่ำที่ `min(12, rated)` เพื่อไม่จ่ายเกินพิกัด พร้อมแจ้ง `minimum_supported = false` และ `below_minimum_rating = true` จึงไม่รับรองขั้นต่ำ 12 kW สำหรับกลุ่มนั้น
+- `status` เป็นสถานะก่อนควบคุม; `control_status` เป็น `NOT_NEEDED`, `ADJUSTED` หรือ `LIMITED` แยกผลหลังควบคุม
+- เก็บความละเอียดเต็มในการคำนวณ แล้วปัด 2 ตำแหน่งตอนส่งผล ดังนั้นการคูณตัวเลขต่อตู้ที่ปัดแล้วอาจต่างจากยอดรวมเล็กน้อย ใช้ tolerance 0.000001 ในการตัดสินผลคลาดเคลื่อนเชิงตัวเลข
 
-### PWM สำหรับจำลอง hardware
-ระบบจำลองเลือกตู้ 50 kW เป็นแหล่งอ้างอิงหลัก หากไม่มีจะใช้ตู้ขนาดแรกที่พบ
+### ตัวอย่างตรวจสอบจากข้อมูล Supabase วันที่ 14 พฤศจิกายน 2026
+
+ตั้งค่า 50 MVA, limit 80%, PF 0.9; ไม่ปรับข้อมูลโหลดในฐานข้อมูลในขั้นเปลี่ยนสูตร
+
+| เวลา | Base % | Active 50 / 150 kW | งบ EV (kW) | ผลรอบแรก 50 / 150 (kW/ตู้) | ผลสุดท้าย 50 / 150 (kW/ตู้) | ผลควบคุม |
+|---|---:|---:|---:|---:|---:|---|
+| 18:00 | 73.50 | 76 / 49 | 2,925 | 13.12 / 39.35 | 13.12 / 39.35 | อยู่ในขีดจำกัด |
+| 18:55 | 74.88 | 84 / 53 | 2,304 | 9.48 / 28.44 | 12 / 24.45 | อยู่ในขีดจำกัด |
+| 20:55 | 77.88 | 68 / 43 | 954 | 4.84 / 14.53 | 12 / 12 | ยังเกิน 420 kVA |
+
+ที่ 18:55 ตู้เล็กใช้ `84 × 12 = 1,008 kW` เหลือ `2,304 - 1,008 = 1,296 kW` ให้ตู้ใหญ่ 53 ตู้ จึงได้ `1,296 / 53 ≈ 24.45 kW/ตู้`
+
+จาก 288 แถว ผลรอบแรกของตู้เล็กต่ำกว่า 12 kW จำนวน 35 แถว: กระจายต่อได้ 25 แถว และยังเกินขีดจำกัด 10 แถวที่ 20:15–21:00 ตัวเลขนี้เป็นผลของข้อมูลและค่าตั้งดังกล่าว ไม่ใช่คุณสมบัติคงที่ของระบบ และไม่ใช่ผลจาก MATLAB
+
+### ผลลัพธ์การจัดสรรกำลังและการเตรียมเชื่อม MATLAB
+
+ผลปัจจุบันรายขนาดตู้อยู่ใน `charger_adjusted`: `proportional_power_kW` คือผลรอบแรก, `new_power_kW` คือกำลังต่อหัวสุดท้าย, `reduction_percent` คือเปอร์เซ็นต์ที่ลด และ `new_power_percent` คือเปอร์เซ็นต์ที่เหลือ ส่วน `redistributed_extra_kW` คือกำลังที่ลดเพิ่มเติมจากผลรอบแรก (รายตู้ใน `charger_adjusted`, ผลรวมทุกตู้ในระดับบน)
+
+เลิกส่ง `reduce_per_charger_kW` เพราะไม่มีการลด kW เท่ากันต่อหัวแล้ว ใช้ `initial_reduction_percent` และ `initial_remaining_percent` แทน
 
 ```text
-pwm = round((new_power_kW / original_power_kW) x 255)
-voltage = (pwm / 255) x 5
-watt_sim_kW = (pwm / 255) x original_power_kW
+remaining_percent = new_power_kW / original_kW x 100
+reduction_percent = 100 - remaining_percent
 ```
 
-ตัวอย่าง:
-```text
-original_power = 50 kW
-new_power = 31.5 kW
-pwm = (31.5 / 50) x 255 = 161
-voltage = (161 / 255) x 5 = 3.16 V
-```
+ถอด PWM, voltage จำลอง และ `GET /api/hardware/latest` แล้ว ไม่มีการสั่งฮาร์ดแวร์ภายนอก
+
+ขั้นต่อไปต้องแยกกำลังฝั่ง AC/DC, Power Factor และประสิทธิภาพตู้ก่อนกำหนดสัญญาณเข้า MATLAB การทดลองเดิมใช้กระแสหน่วย A; ห้ามนำค่า kW หรือเปอร์เซ็นต์ไปใส่เป็น A โดยตรง ยังไม่สำรวจหรือแก้ตัวควบคุมในวงจรในขั้นเปลี่ยนสูตรนี้
 
 ---
 
@@ -263,14 +286,16 @@ voltage = (161 / 255) x 5 = 3.16 V
 
 ```text
 ev-charging-simulation/
+├── README.md                        # วิธีรันและสูตรปัจจุบันสำหรับผู้ใช้
 ├── CLAUDE.md
 ├── AGENTS.md
-├── HARDWARE.md                       # แผน hardware demo จากอุปกรณ์จริง
+├── HARDWARE.md                       # ประวัติ hardware demo ที่ยุติแล้ว
 ├── package.json
 ├── package-lock.json
 ├── .env                              # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 ├── .env.example
 ├── .gitignore
+├── test/                            # ทดสอบสูตรและการแสดงผล Dashboard
 ├── supabase/
 │   └── schema.sql                    # SQL สำหรับสร้าง tables
 └── src/
@@ -297,7 +322,6 @@ ev-charging-simulation/
     │   ├── db.service.js             # Supabase CRUD
     │   ├── csv.service.js            # parse/validate CSV upload
     │   ├── calculation.service.js    # load/overload calculation
-    │   ├── pwm.service.js            # PWM calculation
     │   └── simulation.service.js     # realtime loop
     └── public/
         ├── upload.html
@@ -323,26 +347,26 @@ ev-charging-simulation/
 - Supabase schema และ backend CRUD
 - CSV upload + preview + validation
 - Dashboard realtime จาก Supabase จริง
-- Calculation logic dynamic ตามขนาดตู้
+- Calculation logic dynamic ตามขนาดตู้: ลดตามสัดส่วน มีขั้นต่ำ 12 kW และกระจายไปยังตู้ที่ยังลดได้
 - Power Factor input ปรับได้บน Dashboard และใช้คำนวณ kW/kVA/kVAr
-- PWM simulation บนเว็บ
+- ถอดการคำนวณและการแสดง PWM รวมถึง API ฮาร์ดแวร์ออกแล้ว (14 พฤศจิกายน 2026)
 - UI ภาษาไทยแบบ minimal พร้อมโลโก้ SPU และข้อมูลโครงงาน
-- Chart แบบ stacked Base load + EV load พร้อมเส้น limit
-- หน้า formulas อธิบายสูตร P, Q, S, PF, Overload และ PWM
-- เพิ่ม `HARDWARE.md` สำหรับ Phase hardware demo ด้วย ESP32 + LCD 16x2 I2C
+- Chart แบบ stacked Base load + EV หลังควบคุม พร้อมเส้นโหลดรวมก่อนควบคุมและเส้น limit
+- Dashboard ฉบับออกแบบใหม่ แสดงผลรอบแรกเทียบผลสุดท้าย พร้อมสถานะเมื่อยังเกินหลังควบคุม
+- หน้า formulas อธิบายสูตร P, Q, S, PF, Overload และการปรับลดกำลัง
+- เก็บ `HARDWARE.md` และ firmware ESP32 เป็นประวัติ; ระบบปัจจุบันไม่เปิด endpoint ให้ firmware เดิม
 - Clear database แล้ว simulation cache ถูก reset
 - ไม่มี local CSV fallback ใน production flow
 
 ### ต้องทำต่อ
-1. ทดสอบ demo flow แบบเต็มตั้งแต่ upload -> start simulation -> overload -> PWM ลดลง
-2. เตรียมชุด CSV สำหรับนำเสนอให้อาจารย์ แยกเก็บนอก repo
-3. เพิ่ม validation เชิงลึก: active chargers ต้องไม่เกิน total units
-4. เพิ่ม message บน Dashboard เมื่อยังไม่มีข้อมูลใน Supabase
-5. Deploy บน Railway/Render
-6. Phase hardware demo: เพิ่ม endpoint `GET /api/hardware/latest` สำหรับให้ ESP32 อ่านค่าล่าสุด
-7. เขียน firmware ESP32: เชื่อม Wi-Fi, HTTP polling, parse JSON, แสดงผลบน LCD 16x2 I2C
-8. ทดสอบ I2C address ของ LCD (`0x27` หรือ `0x3F`) และทดสอบไฟเลี้ยง 3.3V/5V อย่างระวัง
-9. ถ้าต้องการความแม่นยำเชิงไฟฟ้าเพิ่ม: เพิ่ม voltage level, current calculation, PF แยกตามโหลด และ control strategy แบบ proportional/priority
+1. ให้ผู้ใช้ทบทวนการออกแบบ Dashboard ฉบับแรก และตรวจผลจากตัวอย่าง 18:00 / 18:55 / 20:55
+2. ตกลงขอบเขตกำลังตู้ว่าเป็น DC output และเพิ่มประสิทธิภาพตู้ η โดยแยกจาก PF
+3. ออกแบบข้อมูลโหลดจำลองชุดใหม่หากต้องการให้ทุกช่วงเวลารักษาขั้นต่ำ 12 kW และอยู่ใน limit พร้อมกัน; ข้อมูลเดิมยังเกินหลังควบคุม 10 แถวที่ค่าตั้ง 50 MVA / 80% / PF 0.9
+4. สำรวจโมเดล MATLAB เพื่อระบุค่าเข้าและการวัดแรงดัน/กระแส/กำลังที่ใช้ตรวจผลจริง
+5. เชื่อมค่าเป้าหมายกับ MATLAB หลังตรวจวงจรและหน่วยแล้ว; ปัจจุบันเว็บ Flask ยังทดลองแยก
+6. เตรียมชุด CSV สำหรับนำเสนอให้อาจารย์ แยกเก็บนอก repo
+7. ตรวจความเหมาะสมของจำนวน active และโหลดพื้นฐานด้วยข้อมูลอ้างอิงในพื้นที่จริงก่อนอ้างความสมจริง
+8. Deploy บน Railway/Render เมื่อพร้อม
 
 ---
 
@@ -351,6 +375,7 @@ ev-charging-simulation/
 ```bash
 npm install
 npm run p
+npm test # ทดสอบสูตรจัดสรรกำลังและกรณีขอบเขต
 ```
 
 เปิดเว็บ:
@@ -419,3 +444,29 @@ https://github.com/Pat10504/EV-Changing-Simulation.git
 - มีหลักฐานผู้ใช้รันผ่าน Python และเว็บ local ที่เป้าหมาย 40 A ได้ 39.46074956936718 A ตรงกัน ค่านี้เป็นตัวอย่างสุดท้าย ไม่ใช่ค่าเฉลี่ยหรือการรับรองวงจรจริง
 - สอนให้ผู้ใช้ลงมือทีละขั้นและตรวจผลจริงก่อนขยายงาน เมื่อผู้ใช้มอบหมายให้ agent ทำ ให้ทำภายในขอบเขตที่อนุมัติ
 - ไม่เก็บ `.venv`, Python cache, `slprj` หรือ `.slxc` ใน Git ดูวิธีรันและบทบาทไฟล์ใน `experiments/python-matlab-engine/README.md`
+
+---
+
+## 14. ยุติ PWM และทบทวนสูตร — 14 พฤศจิกายน 2026
+
+- ผู้ใช้ให้ถอด PWM เพราะไม่สั่งฮาร์ดแวร์แล้ว; ถอด service, UI, signal metadata และ hardware API จากระบบที่รันจริง
+- เก็บ firmware, `HARDWARE.md`, คู่มือ `docs/ev_charging_simulation_manual.docx` และตัวสร้างคู่มือ `scripts/build_manual_docx.py` เป็นเอกสาร/การทดลองรุ่นเก่า ซึ่งยังกล่าวถึง PWM และไม่ใช่คู่มือระบบปัจจุบัน
+- ในขั้นถอด PWM คงผลคำนวณเดิมไว้ก่อน ต่อมาเปลี่ยนเป็นสูตรสัดส่วน + ขั้นต่ำ 12 kW ตามหัวข้อ 15; ยังไม่เพิ่มการเชื่อม MATLAB
+- โค้ดเดิมใช้ PF ร่วมสำหรับโหลดพื้นฐานและ EV, รวม P/Q, ลด kW เท่ากันต่อหัวก่อนกระจายส่วนที่เหลือ และจำกัดขั้นต่ำ 20 kW
+- โค้ดเดิมใช้ `active_*kW` จากแต่ละ time slot หาขนาดและจำนวนตู้ ส่วน `chargers` ใช้ตรวจจำนวนและแสดงทะเบียน; ยังไม่มีข้อมูลรถรายคัน/SOC/แรงดันแบตเตอรี่
+- ภาพอ้างอิงล่าสุดใช้ η=0.95, ลดเป็นสัดส่วนเดียวกันและไม่มีขั้นต่ำ เป็นคนละสมมติฐานกับโค้ดเดิม
+- ภาพเขียน 50 MVA เป็น 50,000 kW ซึ่งใช้ได้เมื่อสมมติ PF=1; หากใช้ PF=0.9 ต้องรักษาหน่วย kVA และแยก η จาก PF
+- การอ่าน Supabase ณ วันที่ตรวจ: 50 kW จำนวน 120 ตู้, 150 kW จำนวน 60 ตู้, โหลด 288 แถว 00:00–23:55 ทุก 5 นาที
+- ตัวอย่างข้อมูลจริง 18:00: base 73.5%, active 50/150 kW = 76/49; ที่ 50 MVA, limit 80%, PF 0.9 สูตรเดิมให้ก่อน 49,138.89 kVA หลัง 40,000 kVA; กำลังต่อหัว 20 และประมาณ 28.67 kW
+- ตัวเลขนี้เป็นผลจากฟังก์ชันคำนวณเดิมกับข้อมูล Supabase ไม่ใช่ผลจำลองวงจร MATLAB และไม่ใช่การรับรองการทำงานของตู้จริง
+
+---
+
+## 15. ลดเป็นเปอร์เซ็นต์และขั้นต่ำ 12 kW — 14 พฤศจิกายน 2026
+
+- ใช้สูตรในหัวข้อ 6 แทนการลด kW เท่ากันและขั้นต่ำ 20 kW เดิม พร้อมแยกผลรอบแรกและผลสุดท้าย
+- กรณีงบไม่พอคงขั้นต่ำและรายงานส่วนเกินอย่างตรงไปตรงมา ไม่แอบลด active หรือแก้ข้อมูลใน Supabase
+- เปลี่ยน Dashboard และหน้า formulas ให้ตรงกับสูตรใหม่ ส่วนการออกแบบหน้าจอเป็นฉบับแรกสำหรับให้ผู้ใช้ทบทวน
+- คงสมมติฐาน PF ร่วม, η = 1 และความต้องการเริ่มต้นเต็มพิกัดสำหรับทุกตู้ active ไม่มีข้อมูล SOC หรือการยอมรับกำลังของรถรายคัน
+- มี `npm test` ตรวจตัวอย่างที่คุยกัน การกระจายหลายขนาด กรณีไม่มี active โหลดพื้นฐานเกิน limit และขอบเขตขั้นต่ำ
+- ขอบเขต MATLAB/Python ยังเป็นการทดลองแยก ไม่มีการส่งค่า kW หรือ % ไปใส่กระแส A โดยตรง

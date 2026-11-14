@@ -16,7 +16,7 @@
         <span class="brand-copy">
           <span class="project-kicker">Engineering Calculation Center</span>
           <h1>ศูนย์อธิบายสูตรคำนวณโหลดหม้อแปลง</h1>
-          <p>อธิบายว่า parameter ในหน้า Dashboard ถูกนำไปคำนวณ Base load, EV load, Total load, Overload และ PWM อย่างไรตามหลัก P-Q-S</p>
+          <p>อธิบายว่า parameter ในหน้า Dashboard ถูกนำไปคำนวณ Base load, EV load, Total load, Overload และการปรับลดกำลังชาร์จอย่างไรตามหลัก P-Q-S</p>
         </span>
       </a>
       <nav class="nav">
@@ -34,7 +34,7 @@
         <div class="formula-tags">
           <span>Dashboard input -> MVA, Limit, PF</span>
           <span>CSV input -> Base %, Active Chargers</span>
-          <span>Output -> kVA, kW, PWM</span>
+          <span>Output -> kVA, kW, % กำลังที่เหลือ</span>
         </div>
       </div>
       <div class="formula-triangle-card">
@@ -126,46 +126,42 @@ else if loading% > 70 -> WARNING</code></pre>
       </article>
       <article class="panel flow-card">
         <span class="flow-step">6</span>
-        <h2>ลดกำลังและ PWM</h2>
-        <p>เมื่อ Overload ระบบลดกำลังเฉลี่ยต่อ active charger โดยไม่ลดต่ำกว่า 20 kW ต่อหัว ถ้าตู้เล็กชนขั้นต่ำก่อนจะกระจายส่วนที่เหลือไปยังตู้ใหญ่ แล้วแปลงเป็น PWM 0-255</p>
-        <pre><code>over_limit_kVA = total_S - load_limit_kVA
-over_limit_kW = over_limit_kVA x PF
-reduce_per_charger = over_limit_kW / total_active
-new_power_kW = max(20, original_kW - reduce_per_charger)
-redistribute remaining reduction to chargers above 20 kW
-PWM = new_power_kW / original_kW x 255</code></pre>
+        <h2>ลดเป็น % แล้วรักษาขั้นต่ำ 12 kW</h2>
+        <p>หางบ EV ที่เหลือ แล้วลดกำลังตามสัดส่วนพิกัดเท่ากันก่อน ถ้ากลุ่มใดต่ำกว่า 12 kW ให้ตรึงที่ขั้นต่ำและแบ่งงบที่เหลือใหม่ตามสัดส่วนพิกัดของกลุ่มที่ยังลดได้ ทำซ้ำจนทุกกลุ่มถึงข้อจำกัดที่เหมาะสม</p>
+        <pre><code>B = max(0, (load_limit_kVA - base_kVA) × PF)
+D = Σ(active × rated_kW)
+r0 = min(1, B / D)  # ถ้า D = 0 ใช้ 1
+ผลรอบแรก = rated_kW × r0
+ตรึงกลุ่มที่ต่ำกว่า 12 kW ไว้ที่ 12
+r = งบที่เหลือ / Σ(active × rated ของกลุ่มที่เหลือ)
+remaining_percent = กำลังสุดท้าย / rated_kW × 100
+reduction_percent = 100 - remaining_percent</code></pre>
+        <p>ถ้า B &lt; Σ(active × 12) จะจัดสรรให้ทุกตู้ถึงขั้นต่ำโดยยังอยู่ใน limit ไม่ได้ ระบบแสดงส่วนที่ยังเกินและไม่เปลี่ยนจำนวน active อัตโนมัติ</p>
       </article>
     </section>
 
     <section class="panel worked-example">
-      <div class="section-heading">
-        <h2>ตัวอย่างจากหน้า Dashboard</h2>
-        <span class="small">ใช้ค่าตัวอย่างเพื่ออ่านสูตรตามได้</span>
-      </div>
+      <div class="section-heading"><h2>ตัวอย่าง 18:55 · ตู้เล็กชนขั้นต่ำ ตู้ใหญ่รับการลดเพิ่ม</h2><span class="small">ข้อมูลโหลดที่ตรวจ 14 พ.ย. 2026</span></div>
       <div class="example-layout">
-        <div class="example-inputs">
-          <h3>ค่าที่ตั้งบน Dashboard</h3>
-          <ul>
-            <li><strong>Transformer</strong> 30 MVA = 30,000 kVA</li>
-            <li><strong>Limit</strong> 80% = 24,000 kVA</li>
-            <li><strong>Power Factor</strong> 0.90</li>
-            <li><strong>Base load</strong> 35% = 10,500 kVA</li>
-            <li><strong>EV load</strong> 5,000 kW</li>
-          </ul>
-        </div>
-        <div class="example-results">
-          <h3>ผลคำนวณที่ได้</h3>
-          <div class="result-grid">
-            <span>Base load</span><strong>10,500 kVA</strong>
-            <span>EV load</span><strong>5,000 kW / 5,555.56 kVA</strong>
-            <span>Total S</span><strong>16,055.56 kVA</strong>
-            <span>Loading</span><strong>53.52%</strong>
-            <span>Status</span><strong>NORMAL</strong>
-          </div>
-        </div>
+        <div class="example-inputs"><h3>เริ่มจากงบกำลังรวม</h3><ul>
+          <li>หม้อแปลง 50 MVA, limit 80%, PF 0.90</li><li>โหลดพื้นฐาน 74.88% = 37,440 kVA</li>
+          <li>Active 50 kW = 84 ตู้; 150 kW = 53 ตู้</li><li>ความต้องการ EV = 12,150 kW</li>
+          <li>งบ EV = (40,000 − 37,440) × 0.9 = <strong>2,304 kW</strong></li>
+          <li>ลดรอบแรก 81.04% เหลือกำลัง 18.96%</li>
+        </ul></div>
+        <div class="example-results"><h3>ผลหลังใช้ขั้นต่ำและกระจายใหม่</h3><div class="result-grid">
+          <span>ตู้ 50 kW: รอบแรก → สุดท้าย</span><strong>9.48 → 12 kW</strong>
+          <span>ตู้ 150 kW: รอบแรก → สุดท้าย</span><strong>28.44 → 24.45 kW</strong>
+          <span>ตู้เล็กใช้กำลังรวม</span><strong>84 × 12 = 1,008 kW</strong>
+          <span>งบที่เหลือให้ตู้ใหญ่</span><strong>1,296 kW</strong>
+          <span>กำลังต่อตู้ใหญ่</span><strong>1,296 / 53 ≈ 24.45 kW</strong>
+          <span>โหลดรวมหลังควบคุม</span><strong>40,000 kVA · 80%</strong>
+        </div></div>
       </div>
-      <p class="example-note">ถ้า EV load เพิ่มจน total_S เกิน 24,000 kVA ระบบจะเข้าสู่ OVERLOAD และเริ่มคำนวณการลดกำลังต่อหัวกับค่า PWM</p>
+      <p class="example-note">เปอร์เซ็นต์ที่ลดสุดท้าย: ตู้ 50 kW ลด 76% เหลือ 24%; ตู้ 150 kW ลดประมาณ 83.70% เหลือ 16.30% จึงไม่เท่ากันหลังใช้ข้อจำกัดขั้นต่ำ</p>
+      <p class="example-note"><strong>กรณีที่ลดต่อไม่ได้ เช่น 20:55:</strong> งบเหลือ 954 kW แต่ active 111 ตู้ต้องการขั้นต่ำ 111 × 12 = 1,332 kW ระบบคง 12 kW/ตู้และแสดงว่ายังเกิน 378 kW หรือ 420 kVA ไม่แสดงว่าควบคุมสำเร็จ</p>
     </section>
+    <section class="panel worked-example"><h2>ขอบเขตของแบบจำลอง</h2><p class="example-note">ขั้นต่ำ 12 kW เป็นกติกาการทดลอง ไม่ใช่ขั้นต่ำสากลของรถทุกคัน โมเดลใช้ PF ร่วมและยังไม่คิดการสูญเสีย (η = 1) จึงยังไม่ได้แยกกำลัง AC ขาเข้ากับ DC ขาออก ไม่มี SOC และยังไม่เชื่อมผลไป MATLAB ถ้าใช้ตู้พิกัดต่ำกว่า 12 kW จะจำกัดตามพิกัดและแจ้งว่าตู้กลุ่มนั้นรองรับขั้นต่ำนี้ไม่ได้</p></section>
 
     <section class="formula-grid">
       <article class="panel formula-card">
@@ -174,7 +170,7 @@ PWM = new_power_kW / original_kW x 255</code></pre>
       </article>
       <article class="panel formula-card">
         <h2>ทำไม EV ยังเป็น kW?</h2>
-        <p>rated power ของตู้ชาร์จ เช่น 50 kW หรือ 150 kW คือกำลังจริง P ที่จ่ายให้รถ จึงแสดงเป็น kW ในตารางและสรุป EV load</p>
+        <p>พิกัดตู้ เช่น 50 kW หรือ 150 kW ใช้เป็นความต้องการกำลังชาร์จตั้งต้น ในโมเดลนี้ยังไม่คิดการสูญเสียตู้ จึงใช้ค่า kW เดียวกันคำนวณโหลด EV ฝั่งหม้อแปลง</p>
       </article>
       <article class="panel formula-card">
         <h2>ทำไม PF สำคัญ?</h2>

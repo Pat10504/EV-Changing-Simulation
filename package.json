@@ -6,7 +6,8 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "p": "nodemon src/server.js"
+    "p": "nodemon src/server.js",
+    "test": "node --test"
   },
   "license": "ISC",
   "dependencies": {

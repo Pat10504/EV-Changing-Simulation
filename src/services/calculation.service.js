@@ -1,12 +1,12 @@
 import { CSV_FIELDS } from '../config/constants.js'
-import { calculatePwmSignal } from './pwm.service.js'
 
 const DEFAULT_CONFIG = {
   transformer_mva: 50,
   limit_percent: 80,
   power_factor: 0.9,
 }
-const MIN_ACTIVE_CHARGER_POWER_KW = 20
+const MIN_ACTIVE_CHARGER_POWER_KW = 12
+const EPSILON = 1e-6
 
 export function calculate(record, config = DEFAULT_CONFIG) {
   const transformer_mva = Number(config.transformer_mva ?? DEFAULT_CONFIG.transformer_mva)
@@ -58,39 +58,40 @@ export function calculate(record, config = DEFAULT_CONFIG) {
   const total_load_percent = (total_load_kVA / transformer_kVA) * 100
 
   let status = 'NORMAL'
-  if (total_load_percent > limit_percent) status = 'OVERLOAD'
+  if (total_load_kVA - load_limit_kVA > EPSILON) status = 'OVERLOAD'
   else if (total_load_percent > 70) status = 'WARNING'
 
-  let over_limit_kVA = 0
-  let over_limit_kW = 0
-  let reduce_per_charger_kW = 0
+  const over_limit_kVA = Math.max(0, total_load_kVA - load_limit_kVA)
+  const over_limit_kW = over_limit_kVA * power_factor
+  const ev_budget_kW = Math.max(0, (load_limit_kVA - base_load_kVA) * power_factor)
+  const initialRatio = ev_load_kW > 0 ? Math.min(1, ev_budget_kW / ev_load_kW) : 1
+  const powerByKey = allocatePower(charger_breakdown, ev_budget_kW)
   let actual_reduction_kW = 0
   let redistribution_extra_kW = 0
   const charger_adjusted = {}
 
-  if (status === 'OVERLOAD') {
-    over_limit_kVA = total_load_kVA - load_limit_kVA
-    over_limit_kW = over_limit_kVA * power_factor
-    const total_active = Object.values(charger_breakdown).reduce((sum, c) => sum + c.active, 0)
-    reduce_per_charger_kW = total_active > 0 ? over_limit_kW / total_active : 0
-    const reductionPlan = allocateReduction(charger_breakdown, over_limit_kW)
-
-    for (const [key, c] of Object.entries(charger_breakdown)) {
-      const minPowerKw = Math.min(c.size_kW, MIN_ACTIVE_CHARGER_POWER_KW)
-      const plannedReductionKw = reductionPlan.reductionByKey[key] || 0
-      const new_power_kW = Math.max(minPowerKw, c.size_kW - plannedReductionKw)
-      const reduced_kW = c.size_kW - new_power_kW
-      actual_reduction_kW += reduced_kW * c.active
-      redistribution_extra_kW += Math.max(0, reduced_kW - reduce_per_charger_kW) * c.active
-      charger_adjusted[key] = {
-        original_kW: c.size_kW,
-        min_power_kW: minPowerKw,
-        new_power_kW: round(new_power_kW),
-        reduced_kW: round(reduced_kW),
-        new_power_percent: round((new_power_kW / c.size_kW) * 100),
-        minimum_limited: new_power_kW === minPowerKw && plannedReductionKw >= c.size_kW - minPowerKw,
-        redistributed_extra_kW: round(Math.max(0, reduced_kW - reduce_per_charger_kW)),
-      }
+  for (const [key, c] of Object.entries(charger_breakdown)) {
+    const minPowerKw = Math.min(c.size_kW, MIN_ACTIVE_CHARGER_POWER_KW)
+    const active = c.active > 0
+    const proportionalPowerKw = active ? c.size_kW * initialRatio : 0
+    const new_power_kW = powerByKey[key] ?? 0
+    const reduced_kW = active ? c.size_kW - new_power_kW : 0
+    const extraReductionKw = Math.max(0, proportionalPowerKw - new_power_kW)
+    actual_reduction_kW += reduced_kW * c.active
+    redistribution_extra_kW += extraReductionKw * c.active
+    charger_adjusted[key] = {
+      active: c.active,
+      original_kW: c.size_kW,
+      min_power_kW: minPowerKw,
+      minimum_supported: c.size_kW >= MIN_ACTIVE_CHARGER_POWER_KW,
+      proportional_power_kW: round(proportionalPowerKw),
+      new_power_kW: round(new_power_kW),
+      reduced_kW: round(reduced_kW),
+      new_power_percent: round((new_power_kW / c.size_kW) * 100),
+      reduction_percent: active ? round((reduced_kW / c.size_kW) * 100) : 0,
+      minimum_limited: active && status === 'OVERLOAD' && new_power_kW <= minPowerKw + EPSILON,
+      redistributed_extra_kW: round(extraReductionKw),
+      adjusted_load_kW: round(new_power_kW * c.active),
     }
   }
 
@@ -103,12 +104,6 @@ export function calculate(record, config = DEFAULT_CONFIG) {
   const adjusted_total_load_kVA = Math.sqrt(adjusted_total_load_kW ** 2 + adjusted_total_load_kVAr ** 2)
   const adjusted_total_load_percent = (adjusted_total_load_kVA / transformer_kVA) * 100
   const remaining_over_limit_kVA = Math.max(0, adjusted_total_load_kVA - load_limit_kVA)
-
-  const pwmSignal = calculatePwmSignal({
-    status,
-    chargerBreakdown: charger_breakdown,
-    chargerAdjusted: charger_adjusted,
-  })
 
   return {
     time: record.time ?? record.time_slot,
@@ -134,13 +129,18 @@ export function calculate(record, config = DEFAULT_CONFIG) {
     status,
     over_limit_kVA: round(over_limit_kVA),
     over_limit_kW: round(over_limit_kW),
-    reduce_per_charger_kW: round(reduce_per_charger_kW),
+    allocation_method: 'proportional_with_minimum',
+    ev_budget_kW: round(ev_budget_kW),
+    initial_remaining_percent: round(initialRatio * 100),
+    initial_reduction_percent: round((1 - initialRatio) * 100),
     min_charger_power_kW: MIN_ACTIVE_CHARGER_POWER_KW,
     actual_reduction_kW: round(actual_reduction_kW),
     redistribution_extra_kW: round(redistribution_extra_kW),
-    redistribution_applied: redistribution_extra_kW > 0,
+    redistribution_applied: redistribution_extra_kW > EPSILON,
     unmet_reduction_kW: round(unmet_reduction_kW),
-    control_limited: unmet_reduction_kW > 0,
+    control_limited: unmet_reduction_kW > EPSILON,
+    control_status: unmet_reduction_kW > EPSILON ? 'LIMITED' : status === 'OVERLOAD' ? 'ADJUSTED' : 'NOT_NEEDED',
+    below_minimum_rating: Object.values(charger_breakdown).some(c => c.active > 0 && c.size_kW < MIN_ACTIVE_CHARGER_POWER_KW),
     adjusted_ev_load_kW: round(adjusted_ev_load_kW),
     adjusted_ev_load_kVA: round(adjusted_ev_load_kVA),
     adjusted_total_load_kVA: round(adjusted_total_load_kVA),
@@ -148,7 +148,6 @@ export function calculate(record, config = DEFAULT_CONFIG) {
     remaining_over_limit_kVA: round(remaining_over_limit_kVA),
     charger_breakdown,
     charger_adjusted,
-    ...pwmSignal,
   }
 }
 
@@ -157,45 +156,43 @@ function getTotalUnits(size, chargers = []) {
   return Number(match?.total_units || 0)
 }
 
-function allocateReduction(chargerBreakdown, requiredReductionKw) {
+function allocatePower(chargerBreakdown, budgetKw) {
   const entries = Object.entries(chargerBreakdown)
     .map(([key, charger]) => ({
       key,
-      active: Number(charger.active || 0),
-      maxReductionPerCharger: Math.max(
-        0,
-        Number(charger.size_kW || 0) - Math.min(Number(charger.size_kW || 0), MIN_ACTIVE_CHARGER_POWER_KW)
-      ),
+      active: charger.active,
+      rated: charger.size_kW,
+      minimum: Math.min(charger.size_kW, MIN_ACTIVE_CHARGER_POWER_KW),
     }))
     .filter((entry) => entry.active > 0)
 
-  const reductionByKey = Object.fromEntries(entries.map((entry) => [entry.key, 0]))
-  let remainingReductionKw = Math.max(0, requiredReductionKw)
-  let adjustableEntries = entries
-
-  while (remainingReductionKw > 0.000001 && adjustableEntries.length > 0) {
-    const activeCount = adjustableEntries.reduce((sum, entry) => sum + entry.active, 0)
-    if (activeCount <= 0) break
-
-    const equalReductionKw = remainingReductionKw / activeCount
-    let usedThisRoundKw = 0
-
-    adjustableEntries = adjustableEntries.filter((entry) => {
-      const headroomKw = entry.maxReductionPerCharger - reductionByKey[entry.key]
-      const appliedKw = Math.min(equalReductionKw, headroomKw)
-      reductionByKey[entry.key] += appliedKw
-      usedThisRoundKw += appliedKw * entry.active
-      return headroomKw - appliedKw > 0.000001
-    })
-
-    if (usedThisRoundKw <= 0.000001) break
-    remainingReductionKw -= usedThisRoundKw
+  const powerByKey = {}
+  const minimumTotalKw = entries.reduce((sum, c) => sum + c.minimum * c.active, 0)
+  // Keep the minimum even if infeasible; the caller reports the remaining overload.
+  // This simulation never silently switches off chargers or changes CSV active counts.
+  if (budgetKw <= minimumTotalKw) {
+    return Object.fromEntries(entries.map(c => [c.key, c.minimum]))
   }
 
-  return {
-    reductionByKey,
-    unmetReductionKw: Math.max(0, remainingReductionKw),
+  let availableKw = budgetKw
+  let adjustable = entries
+  while (adjustable.length > 0) {
+    const demandKw = adjustable.reduce((sum, c) => sum + c.rated * c.active, 0)
+    const ratio = Math.min(1, Math.max(0, availableKw / demandKw))
+    const atMinimum = adjustable.filter(c => c.rated * ratio < c.minimum)
+    if (atMinimum.length === 0) {
+      for (const c of adjustable) powerByKey[c.key] = c.rated * ratio
+      break
+    }
+    // Freeze floor-bound groups, then recompute one common ratio for the rest.
+    for (const c of atMinimum) {
+      powerByKey[c.key] = c.minimum
+      availableKw -= c.minimum * c.active
+    }
+    const fixedKeys = new Set(atMinimum.map(c => c.key))
+    adjustable = adjustable.filter(c => !fixedKeys.has(c.key))
   }
+  return powerByKey
 }
 
 function clampPowerFactor(value) {

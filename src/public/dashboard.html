@@ -6,7 +6,7 @@
   <title>Dashboard | ระบบจำลองการจัดการพลังงาน EV</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
-<body>
+<body class="energy-dashboard">
   <main class="shell">
     <header class="topbar project-header">
       <a class="brand project-brand" href="/dashboard">
@@ -16,7 +16,7 @@
         <span class="brand-copy">
           <span class="project-kicker">โครงงานวิศวกรรมไฟฟ้า | มหาวิทยาลัยศรีปทุม</span>
           <h1>ระบบจำลองการจัดการพลังงานสำหรับสถานีชาร์จ EV</h1>
-          <p>ป้องกันภาระสูงสุดของหม้อแปลงไฟฟ้ากำลังด้วยการจำลอง Load Management และสัญญาณ PWM แบบ Realtime</p>
+          <p>จำลองโหลดหม้อแปลงและการปรับลดกำลังชาร์จของตู้แต่ละประเภทแบบ Realtime</p>
         </span>
       </a>
       <nav class="nav">
@@ -26,152 +26,66 @@
       </nav>
     </header>
 
+
+    <section class="panel simulation-toolbar" aria-label="ตั้งค่าการจำลอง">
+      <div class="toolbar-title"><span class="eyebrow">การจำลองรายช่วงเวลา</span><div class="clock"><strong id="timeSlot">--:--</strong><span id="recordProgress">ยังไม่มีผลคำนวณ</span></div></div>
+      <div class="controls">
+        <div class="field"><label for="transformerMva">หม้อแปลง (MVA)</label><input id="transformerMva" type="number" required min="1" step="1" value="50"></div>
+        <div class="field"><label for="limitPercent">ขีดจำกัดโหลด (%)</label><input id="limitPercent" type="number" required min="1" max="100" value="80"></div>
+        <div class="field"><label for="powerFactor">Power Factor</label><input id="powerFactor" type="number" required min="0.1" max="1" step="0.01" value="0.90"></div>
+        <div class="field"><label for="speed">แสดง 1 แถวทุก</label><select id="speed"><option value="2000">2 วินาที</option><option value="1000">1 วินาที</option><option value="400">0.4 วินาที</option></select></div>
+      </div>
+      <div class="run-controls"><button id="playButton" class="primary">เริ่มจำลอง</button><button id="pauseButton" disabled>พัก</button><button id="resetButton">รีเซ็ต</button><span id="connectionState" class="connection-label" role="status">กำลังเชื่อมต่อ…</span></div>
+    </section>
+
+    <div id="dashboardMessage" class="dashboard-message" role="alert" hidden></div>
+    <section id="controlOutcome" class="control-outcome waiting" aria-live="polite">
+      <div><span class="eyebrow">ผลการควบคุม</span><h2 id="controlTitle">พร้อมเริ่มจำลอง</h2><p id="controlDescription">อ่านจำนวนตู้และโหลดพื้นฐานจาก Supabase แล้วคำนวณกำลังที่จัดสรรได้ในแต่ละช่วงเวลา</p></div>
+      <span class="rule-chip">ลดตามสัดส่วน · ขั้นต่ำ 12 kW/ตู้</span>
+    </section>
+
+    <section class="grid metric-grid summary-metrics" aria-label="โหลดหม้อแปลงและงบ EV">
+      <article class="panel metric"><span class="label">โหลดรวม · ก่อนควบคุม</span><strong id="totalLoad">—</strong><span id="totalPercent">เทียบพิกัดหม้อแปลง</span><span id="statusPill" class="status-pill neutral">รอข้อมูล</span></article>
+      <article class="panel metric controlled-load-card"><span class="label">โหลดรวม · หลังควบคุม</span><strong id="controlledLoad">—</strong><span id="controlledPercent">เทียบพิกัดหม้อแปลง</span><div class="load-meter"><span id="controlledMeter"></span></div></article>
+      <article class="panel metric"><span class="label">โหลดพื้นฐานของพื้นที่</span><strong id="baseLoad">—</strong><span id="basePercent">บ้านเรือน อาคาร และโหลดอื่น</span><span class="metric-note">ส่วนนี้ไม่ถูกปรับลด</span></article>
+      <article class="panel metric budget-card"><span class="label">งบกำลังที่เหลือให้ EV</span><strong id="evBudget">—</strong><span id="limitLoad">คำนวณจากขีดจำกัด − โหลดพื้นฐาน</span><span class="metric-note">kW สำหรับจัดสรรให้ตู้ active</span></article>
+    </section>
+
+    <section class="grid analysis-layout">
+      <article class="panel chart-panel">
+        <div class="section-heading"><div><span class="eyebrow">ภาพรวมของวัน</span><h2>โหลดก่อนและหลังควบคุม</h2></div><span class="small">% ของพิกัดหม้อแปลง</span></div>
+        <div class="chart-box"><canvas id="loadChart" aria-label="กราฟโหลดพื้นฐาน โหลด EV หลังควบคุม โหลดรวมก่อนควบคุม และขีดจำกัด" role="img"></canvas></div>
+        <p class="chart-caption">พื้นที่ซ้อน = โหลดรวมหลังควบคุม · เส้นสีเทา = ก่อนควบคุม · เส้นประสีแดง = ขีดจำกัดที่ตั้งไว้</p>
+      </article>
+      <aside class="panel allocation-summary">
+        <span class="eyebrow">วิธีจัดสรรในช่วงเวลานี้</span><h2>จากงบรวม → กำลังต่อตู้</h2>
+        <dl class="allocation-values">
+          <div><dt>EV ต้องการก่อนควบคุม</dt><dd id="evLoad">—</dd></div>
+          <div><dt>ลดรอบแรกเท่ากันทุกขนาด</dt><dd id="initialReduction">—</dd></div>
+          <div><dt>กำลังที่เหลือในรอบแรก</dt><dd id="initialRemaining">—</dd></div>
+          <div><dt>กระจายไปลดตู้ที่ยังลดได้</dt><dd id="redistributedPower">—</dd></div>
+          <div class="allocation-total"><dt>EV รวมหลังจัดสรร</dt><dd id="adjustedEvLoad">—</dd></div>
+        </dl>
+        <p id="allocationNote" class="allocation-note">ถ้าผลรอบแรกต่ำกว่า 12 kW จะตรึงที่ขั้นต่ำ แล้วคำนวณสัดส่วนใหม่ให้ตู้กลุ่มที่เหลือ</p>
+      </aside>
+    </section>
+
+    <section class="panel charger-panel">
+      <div class="section-heading"><div><span class="eyebrow">รายละเอียดการจัดสรร</span><h2>กำลังชาร์จแยกตามขนาดตู้</h2></div><span id="activeCount" class="rule-chip">รอข้อมูล active</span></div>
+      <p class="table-intro">อ่านจากซ้ายไปขวา: ความต้องการ → ผลลดเป็น % → ผลหลังใช้ขั้นต่ำ 12 kW กำลังที่แสดงเป็นค่าต่อตู้ active</p>
+      <div class="table-wrap"><table class="allocation-table">
+        <thead><tr><th scope="col">พิกัดตู้</th><th scope="col">Active / ติดตั้ง</th><th scope="col">โหลดก่อน<br><small>kW รวมกลุ่ม</small></th><th scope="col">หลังลด % รอบแรก<br><small>kW/ตู้ ก่อนขั้นต่ำ</small></th><th scope="col">กำลังสุดท้าย<br><small>kW/ตู้</small></th><th scope="col">ลดไป</th><th scope="col">กำลังที่เหลือ</th><th scope="col">ผลการจัดสรร</th></tr></thead>
+        <tbody id="chargerRows"><tr><td colspan="8" class="empty-state">กดเริ่มจำลองเพื่อดูผลจากข้อมูลโหลด</td></tr></tbody>
+      </table></div>
+      <p class="table-footnote">ตู้ที่ไม่มีรถชาร์จจะไม่ร่วมแบ่งงบ · ผลรวมคำนวณด้วยค่าความละเอียดเต็มก่อนปัดเศษแสดงผล</p>
+    </section>
+    <details class="model-assumptions"><summary>ขอบเขตและสมมติฐานของผลจำลอง</summary><p>ใช้ Power Factor ร่วมสำหรับโหลดพื้นฐานและ EV และยังไม่คิดการสูญเสียของตู้ (η = 1) จำนวน active มาจากตารางโหลด ไม่มีการสั่งพักตู้หรือเปลี่ยนจำนวนอัตโนมัติ ขั้นต่ำ 12 kW เป็นกติกาการทดลอง ไม่ใช่ขั้นต่ำสากลของรถทุกคัน ผลนี้ยังไม่ได้ส่งไป MATLAB หรือฮาร์ดแวร์</p><a href="/formulas">ดูสูตรและตัวอย่างการกระจายกำลัง →</a></details>
     <section class="project-credits">
       <span><strong>นักศึกษา</strong> นายพัฏ เครือดำรงค์ 66028195 <span class="dot-separator"></span> นายสาคเรศ ลิมปิจักร์ 66036675 <span class="dot-separator"></span> นายปภาวิชญ์ ดีล้น 66072828</span>
       <span><strong>อาจารย์ที่ปรึกษา</strong> ผู้ช่วยศาสตราจารย์ เอกชัย ดีศิริ</span>
     </section>
 
-    <section class="controls panel flat">
-      <div class="field">
-        <label for="transformerMva">พิกัดหม้อแปลง (MVA)</label>
-        <input id="transformerMva" type="number" min="1" value="50">
-      </div>
-      <div class="field">
-        <label for="limitPercent">ขีดจำกัดโหลด (%)</label>
-        <input id="limitPercent" type="number" min="1" max="100" value="80">
-      </div>
-      <div class="field compact-field">
-        <label for="powerFactor">Power Factor</label>
-        <input id="powerFactor" type="number" min="0.1" max="1" step="0.01" value="0.90">
-      </div>
-      <div class="field">
-        <label for="speed">ความเร็ว</label>
-        <select id="speed">
-          <option value="2000">1x / 2 วินาที</option>
-          <option value="1000">2x / 1 วินาที</option>
-          <option value="400">5x / 0.4 วินาที</option>
-        </select>
-      </div>
-      <button id="playButton" class="primary">เริ่มจำลอง</button>
-      <button id="pauseButton">หยุดชั่วคราว</button>
-      <button id="resetButton">รีเซ็ต</button>
-      <span id="connectionState" class="status-pill">กำลังเชื่อมต่อ</span>
-    </section>
-
-    <section class="grid dashboard-grid" style="margin-top: 16px;">
-      <div class="grid">
-        <section class="grid metric-grid">
-          <article class="panel metric">
-            <span class="label">ช่วงเวลา</span>
-            <strong id="timeSlot">--:--</strong>
-            <span id="recordProgress">0 / 0 records</span>
-          </article>
-          <article class="panel metric">
-            <span class="label">โหลดรวม</span>
-            <strong id="totalLoad">0 kVA</strong>
-            <span id="totalPercent">0% ของพิกัดหม้อแปลง</span>
-          </article>
-          <article class="panel metric controlled-load-card">
-            <span class="label">โหลดหลังควบคุม</span>
-            <strong id="controlledLoad">0 kVA</strong>
-            <span id="controlledPercent">0% หลังปรับลด</span>
-          </article>
-          <article class="panel metric">
-            <span class="label">โหลดพื้นฐาน</span>
-            <strong id="baseLoad">0 kVA</strong>
-            <span id="basePercent">0% โหลดพื้นฐาน</span>
-          </article>
-        </section>
-
-        <section class="panel">
-          <h2>กราฟโหลด 24 ชั่วโมง</h2>
-          <div class="chart-box">
-            <canvas id="loadChart"></canvas>
-          </div>
-        </section>
-
-        <section class="panel">
-          <h2>โหลดตู้ชาร์จแยกตามประเภท</h2>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>ขนาดตู้</th>
-                  <th>กำลังใช้งาน</th>
-                  <th>โหลด</th>
-                  <th>กำลังต่อหัวหลังปรับ</th>
-                </tr>
-              </thead>
-              <tbody id="chargerRows">
-                <tr><td colspan="4">รอข้อมูลการจำลอง</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </div>
-
-      <aside class="grid">
-        <article class="panel metric">
-          <span class="label">สถานะระบบ</span>
-          <strong><span id="statusPill" class="status-pill">NORMAL</span></strong>
-          <span id="overLimit">โหลดเกินขีดจำกัด: 0 kW</span>
-        </article>
-
-        <section class="panel pwm-card">
-          <h2>สัญญาณ PWM แบบ Realtime</h2>
-          <div class="metric">
-            <span class="label">ค่า PWM Output</span>
-            <strong id="pwmValue">255</strong>
-            <span id="pwmDetail">5.00 V / กำลังจำลอง 50.00 kW</span>
-          </div>
-          <div class="pwm-bar">
-            <div id="pwmFill" class="pwm-fill"></div>
-          </div>
-          <div class="signal-line">
-            <span>ปลายทางสัญญาณ</span>
-            <strong>Web PWM Monitor</strong>
-          </div>
-          <div class="signal-line">
-            <span>Realtime event</span>
-            <strong id="signalEvent">simulation:update</strong>
-          </div>
-        </section>
-
-        <section class="panel">
-          <h2>สรุปกำลังไฟฟ้า</h2>
-          <div class="signal-line">
-            <span>โหลด EV</span>
-            <strong id="evLoad">0 kW</strong>
-          </div>
-          <div class="signal-line">
-            <span>ขีดจำกัด</span>
-            <strong id="limitLoad">0 kVA</strong>
-          </div>
-          <div class="signal-line">
-            <span>โหลดก่อนควบคุม</span>
-            <strong id="preControlLoad">0 kVA</strong>
-          </div>
-          <div class="signal-line">
-            <span>โหลดหลังควบคุม</span>
-            <strong id="postControlLoad">0 kVA</strong>
-          </div>
-          <div class="signal-line">
-            <span>ต้องลดเฉลี่ยต่อหัว</span>
-            <strong id="reducePerCharger">0 kW</strong>
-          </div>
-          <div class="signal-line">
-            <span>ขั้นต่ำต่อตู้</span>
-            <strong id="minChargerPower">20 kW</strong>
-          </div>
-          <div class="signal-line">
-            <span>ผลการกระจาย</span>
-            <strong id="controlLimit">ปกติ</strong>
-          </div>
-        </section>
-      </aside>
-    </section>
   </main>
-
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/dashboard.js"></script>

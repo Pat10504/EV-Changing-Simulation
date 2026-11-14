@@ -1,3 +1,8 @@
+> **เอกสารย้อนหลัง — ยุติการใช้งานตั้งแต่ 14 พฤศจิกายน 2026**
+> ระบบปัจจุบันถอด PWM และ `GET /api/hardware/latest` แล้ว เพราะเปลี่ยนไปศึกษาการปรับกำลังผ่านวงจร MATLAB
+> เนื้อหาด้านล่างและ firmware ใน `hardware/` เก็บเป็นประวัติการทดลองเดิม; firmware นี้ใช้กับ backend ปัจจุบันไม่ได้
+> คู่มือ `docs/ev_charging_simulation_manual.docx` และตัวสร้าง `scripts/build_manual_docx.py` ก็เป็นคู่มือรุ่นเดิมที่ยังกล่าวถึง PWM
+
 # HARDWARE.md — Phase ทดลองแสดงผลจาก Dashboard
 
 เอกสารนี้อัปเดตจากอุปกรณ์ที่มีจริงล่าสุด เพื่อใช้ทำ demo ฝั่ง hardware ให้อาจารย์ดูก่อน โดยยังไม่ทำวงจรกำลังจริง และยังไม่จำลองโหลด EV ด้วย MOSFET หรือ current sensor ใน phase นี้

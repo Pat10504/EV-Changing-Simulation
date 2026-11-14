@@ -1,6 +1,5 @@
 import { calculate } from './calculation.service.js'
 import { getChargers, getLoadPatterns, isDatabaseConfigured } from './db.service.js'
-import { SIMULATION_SIGNAL } from '../config/constants.js'
 import { config as appConfig } from '../config/index.js'
 
 let records = []
@@ -14,7 +13,6 @@ let currentConfig = {
   power_factor: appConfig.simulation.powerFactor,
 }
 let currentIntervalMs = appConfig.simulation.defaultSpeedMs
-let latestResult = null
 
 export const initSimulation = async (socketIo) => {
   io = socketIo
@@ -49,16 +47,11 @@ export const startSimulation = async (options = {}) => {
       ...currentConfig,
       chargers,
     })
-    latestResult = {
+    io?.emit('simulation:update', {
       ...result,
       index: currentIndex,
       totalRecords: records.length,
       updatedAt: new Date().toISOString(),
-    }
-
-    io?.emit('simulation:update', {
-      ...latestResult,
-      signal: { ...SIMULATION_SIGNAL, realtime: true },
     })
 
     currentIndex++
@@ -74,7 +67,6 @@ export const pauseSimulation = () => {
 export const resetSimulation = () => {
   pauseSimulation()
   currentIndex = 0
-  latestResult = null
   io?.emit('simulation:state', { status: 'reset' })
 }
 
@@ -92,47 +84,6 @@ export function getSimulationState() {
     intervalMs: currentIntervalMs,
     config: currentConfig,
     databaseConfigured: isDatabaseConfigured(),
-  }
-}
-
-export function getHardwareLatest() {
-  if (!latestResult) {
-    return {
-      has_data: false,
-      running: Boolean(intervalId),
-      status: 'NO_DATA',
-      message: 'ยังไม่มีข้อมูลล่าสุด กรุณาเริ่ม simulation บน Dashboard ก่อน',
-    }
-  }
-
-  return {
-    has_data: true,
-    running: Boolean(intervalId),
-    interval_ms: currentIntervalMs,
-    time: latestResult.time,
-    status: latestResult.status,
-    pwm: latestResult.pwm,
-    pwm_voltage: latestResult.pwm_voltage,
-    pwm_watt_sim_kW: latestResult.pwm_watt_sim_kW,
-    pwm_source_kW: latestResult.pwm_source_kW,
-    total_load_percent: latestResult.total_load_percent,
-    total_load_kVA: latestResult.total_load_kVA,
-    total_load_kW: latestResult.total_load_kW,
-    base_load_kVA: latestResult.base_load_kVA,
-    ev_load_kW: latestResult.ev_load_kW,
-    over_limit_kW: latestResult.over_limit_kW,
-    reduce_per_charger_kW: latestResult.reduce_per_charger_kW,
-    min_charger_power_kW: latestResult.min_charger_power_kW,
-    actual_reduction_kW: latestResult.actual_reduction_kW,
-    redistribution_extra_kW: latestResult.redistribution_extra_kW,
-    redistribution_applied: latestResult.redistribution_applied,
-    unmet_reduction_kW: latestResult.unmet_reduction_kW,
-    control_limited: latestResult.control_limited,
-    adjusted_total_load_percent: latestResult.adjusted_total_load_percent,
-    remaining_over_limit_kVA: latestResult.remaining_over_limit_kVA,
-    index: latestResult.index,
-    totalRecords: latestResult.totalRecords,
-    updatedAt: latestResult.updatedAt,
   }
 }
 
