@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import vm from 'node:vm'
 import { calculate } from '../src/services/calculation.service.js'
 
-function dashboard(responses = []) {
+function dashboard(responses = [], ChartImplementation = null) {
   const requests = []
   const html = fs.readFileSync(new URL('../src/public/dashboard.html', import.meta.url), 'utf8')
   const elements = Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(([, id]) => [id, { id, textContent: '', innerHTML: '', style: {}, value: '', handlers: {}, reportValidity: () => true, addEventListener(event, fn) { this.handlers[event] = fn } }]))
@@ -15,7 +15,14 @@ function dashboard(responses = []) {
     window: { matchMedia: () => ({ matches: false }) },
     document: { querySelectorAll: () => Object.values(elements) }, localStorage: { getItem: () => null, setItem() {} },
     io: () => ({ on(name, fn) { events[name] = fn } }),
-    Chart: class { constructor(_element, config) { this.data = config.data; chart = this } update() {} },
+    Chart: class {
+      constructor(element, config) {
+        if (ChartImplementation) { chart = new ChartImplementation(element, config); return chart }
+        this.data = config.data; chart = this
+      }
+      getDatasetMeta(i) { return { data: this.data.datasets[i].data.map((y, x) => ({ x, y })) } }
+      update() {}
+    },
     fetch: async (url, options) => { requests.push({url,body:options?.body ? JSON.parse(options.body) : null}); return { ok: true, json: async () => responses.shift() || ({ status: 'reset' }) } },
   })
   vm.runInContext(fs.readFileSync(new URL('../src/public/js/dashboard.js', import.meta.url), 'utf8'), context)
@@ -96,4 +103,56 @@ test('reconnecting after a server restart clears results that no longer exist', 
   assert.equal(ui.elements.timeSlot.textContent, '--:--')
   assert.equal(ui.elements.totalLoad.textContent, '—')
   assert.equal(ui.chart.data.labels.length, 0)
+})
+
+// Use the installed Chart.js engine with a no-op drawing surface and controlled
+// frame clock: geometry/stacking/animations are real, raster drawing is not needed.
+function animatedChart() {
+  let now = 1000
+  let frames = []
+  const runtime = vm.createContext({
+    window: { requestAnimationFrame: fn => { frames.push(fn) } },
+    Date: class extends Date { static now() { return now } },
+  })
+  vm.runInContext(fs.readFileSync(new URL('../node_modules/chart.js/dist/chart.umd.js', import.meta.url), 'utf8'), runtime)
+  const Chart = runtime.Chart
+  class FramePlatform extends Chart.BasicPlatform { updateConfig() {} }
+  const canvas = { width: 800, height: 400 }
+  const context = new Proxy({ canvas, measureText: text => ({ width: String(text).length * 6 }), getLineDash: () => [] }, {
+    get: (target, key) => key in target ? target[key] : () => {},
+  })
+  canvas.getContext = () => context
+  return {
+    Chart: class {
+      constructor(_element, config) {
+        return new Chart(canvas, { ...config, platform: FramePlatform, options: { ...config.options, responsive: false } })
+      }
+    },
+    frame() { now += 16; const pending = frames; frames = []; pending.forEach(fn => fn()) },
+  }
+}
+test('new chart points animate from the previous endpoint; the limit never dips toward zero', () => {
+  const engine = animatedChart()
+  const ui = dashboard([], engine.Chart)
+  const first = { ...snapshot(75, 80, 50, 0), time: '21:50', running: true }
+  const second = { ...snapshot(74, 80, 50, 1), time: '21:55', running: true, chartHistory: [first] }
+  ui.events['simulation:update'](second)
+  const prior = ui.chart.data.datasets.map((_d, i) => ui.chart.getDatasetMeta(i).data.at(-1).y)
+  const next = { ...snapshot(65, 60, 40, 2), time: '22:00', running: true }
+  ui.events['simulation:update'](next)
+  for (let frame = 0; frame < 16; frame++) {
+    engine.frame()
+    ui.chart.data.datasets.forEach((_dataset, i) => {
+      const tail = ui.chart.getDatasetMeta(i).data.at(-1)
+      const finalY = tail.getProps(['y'], true).y
+      assert.ok(tail.y >= Math.min(prior[i], finalY) - .001 && tail.y <= Math.max(prior[i], finalY) + .001,
+        `dataset ${i}, frame ${frame}: tail must stay between its previous and next values`)
+    })
+    const limitPoints = ui.chart.getDatasetMeta(3).data
+    assert.ok(Math.abs(limitPoints.at(-1).y - limitPoints.at(-2).y) < .001, 'constant limit must stay horizontal throughout the animation')
+  }
+  // Chart-level contexts (including tooltip setup) have no dataIndex.
+  assert.equal(ui.chart.options.animations.x.from({ type: 'chart', chart: ui.chart }), undefined)
+  assert.equal(ui.chart.options.animations.y.from({ type: 'chart', chart: ui.chart }), undefined)
+  ui.chart.destroy()
 })

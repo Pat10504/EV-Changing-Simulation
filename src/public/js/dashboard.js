@@ -2,6 +2,7 @@ const STORAGE_KEYS = { transformerMva: 'transformerMva', limitPercent: 'limitPer
 const ui = Object.fromEntries([...document.querySelectorAll('[id]')].map(element => [element.id, element]))
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 let chartRows = []
+let appendOrigin = null
 const loadChart = createLoadChart()
 const socket = io()
 let isSimulationRunning = false
@@ -227,6 +228,16 @@ function updateLoadChart(data) {
     resetChart(false)
     history.forEach(appendChartRow)
   } else if (data.index <= lastIndex) resetChart(false)
+  // A new Chart.js point normally starts at the baseline. Continue from the
+  // visible endpoint instead, including the stacked EV and constant limit line.
+  const animate = !Array.isArray(history) && !reducedMotion && lastIndex >= 0
+  appendOrigin = animate ? {
+    index: loadChart.data.labels.length,
+    points: loadChart.data.datasets.map((_dataset, i) => {
+      const point = loadChart.getDatasetMeta(i).data.at(-1)
+      return point ? { x: point.x, y: point.y } : null
+    }),
+  } : null
   lastIndex = data.index
   appendChartRow(data)
   while (loadChart.data.labels.length > 288) {
@@ -235,8 +246,9 @@ function updateLoadChart(data) {
     loadChart.data.datasets.forEach(dataset => dataset.data.shift())
   }
   ui.chartRange.textContent = `${loadChart.data.labels[0]} – ${data.time} · % พิกัด`
-  // Bulk history appears immediately; live updates animate for less than one tick.
-  loadChart.update(Array.isArray(history) || reducedMotion ? 'none' : undefined)
+  // Bulk history/first points appear immediately; live updates grow from the tail.
+  try { loadChart.update(animate ? undefined : 'none') }
+  finally { appendOrigin = null }
 }
 function resetChart(redraw = true) {
   lastIndex = -1
@@ -294,6 +306,10 @@ function createLoadChart() {
     options: {
       maintainAspectRatio: false, normalized: true,
       animation: reducedMotion ? false : { duration: 220, easing: 'easeOutQuart' },
+      animations: {
+        x: { from: context => appendOrigin && appendOrigin.index === context.dataIndex ? appendOrigin.points[context.datasetIndex]?.x : undefined },
+        y: { from: context => appendOrigin && appendOrigin.index === context.dataIndex ? appendOrigin.points[context.datasetIndex]?.y : undefined },
+      },
       interaction: { mode: 'index', axis: 'x', intersect: false },
       // Straight segments preserve the sampled values without inventing peaks.
       elements: { line: { borderWidth: 2.5, tension: 0 }, point: {
