@@ -123,14 +123,19 @@ export function createSimulation({ readRecords = getLoadPatterns, readChargers =
       intervalMs: currentIntervalMs, config: currentConfig, databaseConfigured: databaseConfigured(),
       lastResult: lastResult ? { ...lastResult, running: intervalId !== null, chartHistory: chartHistory(lastResult.index) } : null }
   }
+  async function dayOverview(options = {}) {
+    const config = optionsConfig(options)
+    const [day, inventory] = await readDataset()
+    return { source: 'current', frames: day.map(row => calculate(row, { ...config, chargers: inventory })) }
+  }
   async function getAvailableTimes() {
     if (!databaseConfigured()) return []
     return (await readRecords()).map(row => row.time_slot)
   }
   return { initSimulation, startSimulation, seekSimulation, pauseSimulation, resetSimulation,
-    clearSimulationCache, getSimulationState, getAvailableTimes }
+    clearSimulationCache, getSimulationState, getAvailableTimes, dayOverview }
 }
 function inputError(message) { return Object.assign(new Error(message), { status: 400 }) }
 
 export const { initSimulation, startSimulation, seekSimulation, pauseSimulation, resetSimulation,
-  clearSimulationCache, getSimulationState, getAvailableTimes } = createSimulation()
+  clearSimulationCache, getSimulationState, getAvailableTimes, dayOverview } = createSimulation()

@@ -3,8 +3,11 @@ const ui = Object.fromEntries([...document.querySelectorAll('[id]')].map(element
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 let chartRows = []
 let appendOrigin = null
+let dayView = null
 const loadChart = createLoadChart()
 const socket = io()
+let matlabMode = Boolean(window.location?.search && new URLSearchParams(window.location.search).get('mode') === 'matlab')
+let matlabPlayback = null
 let isSimulationRunning = false
 let lastIndex = -1
 let commandPending = false
@@ -17,9 +20,9 @@ const shortcuts = { jump1230: '12:30', jump1835: '18:35', jump2055: '20:55' }
 for (const [key, storageKey] of Object.entries(STORAGE_KEYS)) {
   ui[key].value = localStorage.getItem(storageKey) || ui[key].value
 }
-ui.playButton.addEventListener('click', startSimulation)
-ui.pauseButton.addEventListener('click', () => sendSimulationCommand('/api/simulation/pause'))
-ui.resetButton.addEventListener('click', () => sendSimulationCommand('/api/simulation/reset'))
+ui.playButton.addEventListener('click', () => matlabMode ? matlabPlayback.start() : startSimulation())
+ui.pauseButton.addEventListener('click', () => matlabMode ? matlabPlayback.action('pause') : sendSimulationCommand('/api/simulation/pause'))
+ui.resetButton.addEventListener('click', () => matlabMode ? matlabPlayback.action('stop') : sendSimulationCommand('/api/simulation/reset'))
 ui.startTime.addEventListener('change', () => { timeSelectionPending = true })
 ui.seekButton.addEventListener('click', seekSelectedTime)
 ui.openCircuitButton.addEventListener('click', async () => {
@@ -38,13 +41,16 @@ for (const [id, time] of Object.entries(shortcuts)) {
   ui[id].addEventListener('click', () => {
     ui.startTime.value = time
     timeSelectionPending = true
-    return seekSelectedTime()
+    if (!matlabMode) return seekSelectedTime()
+    matlabPlayback.selectEnd()
   })
 }
 for (const id of ['transformerMva', 'limitPercent', 'powerFactor', 'speed']) {
   ui[id].addEventListener('change', () => {
     if (!validateSettings()) return
     saveSettings()
+    if (id !== 'speed') dayView?.load()
+    if (matlabMode) return
     if (isSimulationRunning) startSimulation()
     else showMessage('ค่าที่เปลี่ยนจะใช้เมื่อกดดูช่วงนี้หรือเล่นต่อ ผลที่แสดงอยู่เป็นผลของการตั้งค่ารอบก่อน', false)
   })
@@ -57,18 +63,30 @@ socket.on('connect', () => {
 socket.on('disconnect', () => {
   ui.connectionState.textContent = '● ขาดการเชื่อมต่อ'
   ui.connectionState.className = 'connection-label disconnected'
-  setRunning(false)
+  if (!matlabMode) setRunning(false)
 })
 socket.on('simulation:update', data => {
+  if (matlabMode) return
   updatesSeen++
+  // Start/seek may come from another browser. Keep the daily overview on that run's settings.
+  if (dayView && Array.isArray(data.chartHistory) && data.transformer_kVA > 0) {
+    ui.transformerMva.value = data.transformer_mva
+    ui.powerFactor.value = data.power_factor
+    ui.limitPercent.value = Number((data.load_limit_kVA * 100 / data.transformer_kVA).toFixed(8))
+    dayView.load()
+  }
   setRunning(data.running ?? true)
   renderSimulationUpdate(data)
 })
 socket.on('simulation:state', state => {
+  if (matlabMode) {
+    if (state.status === 'dataset_changed') { dayView?.invalidate(); return refreshState() }
+    return
+  }
   updatesSeen++
   setRunning(state.status === 'running')
   if (state.status === 'reset') resetDisplay()
-  if (state.status === 'dataset_changed') { resetDisplay(); return refreshState() }
+  if (state.status === 'dataset_changed') { dayView?.invalidate(); resetDisplay(); return refreshState() }
 })
 async function refreshState() {
   const seen = updatesSeen
@@ -82,6 +100,7 @@ async function refreshState() {
       ? availableTimes.map(time => `<option value="${time}">${time}</option>`).join('')
       : '<option value="">ไม่มีข้อมูลเวลา</option>'
     ui.startTime.value = availableTimes.includes(selected) ? selected : availableTimes[0] || ''
+    if (matlabMode) { matlabPlayback?.setTimes(); dayView?.load(); return }
     if (seen === updatesSeen) {
       setRunning(state.running)
       if (state.lastResult || state.running) {
@@ -92,6 +111,7 @@ async function refreshState() {
         if (state.lastResult) renderSimulationUpdate(state.lastResult)
       } else if (lastIndex >= 0) resetDisplay()
     }
+    dayView?.load()
     if (!availableTimes.length) showMessage('ยังไม่มีข้อมูลโหลดพร้อมจำลอง กรุณาตรวจข้อมูลที่หน้าอัปโหลด CSV', false)
     updateControlAvailability()
   } catch (error) { showMessage(error.message) }
@@ -148,7 +168,8 @@ async function sendSimulationCommand(url, body = {}) {
   }
 }
 function updateControlAvailability() {
-  ui.openCircuitButton.disabled = commandPending || isSimulationRunning || !circuitSnapshot?.charger_breakdown?.active_50kW?.active
+  if (matlabMode) { matlabPlayback?.controls(); return }
+  ui.openCircuitButton.disabled = commandPending || isSimulationRunning || Boolean(dayView?.pinned) || !circuitSnapshot?.charger_breakdown?.active_50kW?.active
   ui.playButton.disabled = commandPending || availableTimes.length === 0
   ui.pauseButton.disabled = !isSimulationRunning || commandPending
   ui.resetButton.disabled = commandPending
@@ -171,9 +192,18 @@ function showMessage(message, error = true) {
 function renderSimulationUpdate(data) {
   circuitSnapshot = data
   updateControlAvailability()
-  if (!timeSelectionPending && availableTimes.includes(data.time)) ui.startTime.value = data.time
+  if (!matlabMode && !timeSelectionPending && availableTimes.includes(data.time)) ui.startTime.value = data.time
   ui.timeSlot.textContent = data.time
   ui.recordProgress.textContent = `แถว ${data.index + 1} / ${data.totalRecords}`
+  if (dayView?.ready) {
+    lastIndex = data.index
+    dayView.display()
+    return
+  }
+  renderAllocation(data)
+  updateLoadChart(data)
+}
+function renderAllocation(data) {
   ui.totalLoad.textContent = `${formatNumber(data.total_load_kVA)} kVA`
   ui.totalPercent.textContent = `${formatNumber(data.total_load_percent)}% ของพิกัดหม้อแปลง`
   ui.controlledLoad.textContent = `${formatNumber(data.adjusted_total_load_kVA)} kVA`
@@ -207,7 +237,6 @@ function renderSimulationUpdate(data) {
     ? 'พบตู้พิกัดต่ำกว่า 12 kW: ระบบไม่จัดสรรเกินพิกัด จึงไม่สามารถใช้ขั้นต่ำ 12 kW กับตู้กลุ่มนี้ได้'
     : '12 kW เป็นขั้นต่ำต่อตู้ active เมื่อชนขั้นต่ำ เปอร์เซ็นต์ที่ลดสุดท้ายของแต่ละขนาดจะต่างกัน'
   renderChargerTable(data)
-  updateLoadChart(data)
 }
 function renderChargerTable(data) {
   const rows = Object.entries(data.charger_breakdown || {}).sort((a, b) => a[1].size_kW - b[1].size_kW)
@@ -276,7 +305,8 @@ function resetChart(redraw = true) {
 function resetDisplay() {
   circuitSnapshot = null
   updateControlAvailability()
-  resetChart()
+  if (!dayView?.ready) resetChart()
+  else lastIndex = -1
   for (const id of ['totalLoad','controlledLoad','baseLoad','evBudget','evLoad','initialReduction','initialRemaining','redistributedPower','adjustedEvLoad']) ui[id].textContent = '—'
   ui.timeSlot.textContent = '--:--'
   ui.recordProgress.textContent = 'ยังไม่มีผลคำนวณ'
@@ -288,18 +318,33 @@ function resetDisplay() {
   ui.controlOutcome.className = 'control-outcome waiting'
   ui.controlTitle.textContent = 'พร้อมเริ่มจำลอง'
   ui.controlDescription.textContent = 'เลือกเวลาแล้วกดดูช่วงนี้ หรือกดเริ่มเพื่อเล่นจากแถวแรก'
-  ui.chartRange.textContent = '% ของพิกัดหม้อแปลง'
+  if (!dayView?.ready) ui.chartRange.textContent = '% ของพิกัดหม้อแปลง'
   ui.startTime.value = availableTimes[0] || ''
   timeSelectionPending = false
   ui.activeCount.textContent = 'รอข้อมูล active'
   ui.allocationNote.textContent = 'ถ้าผลรอบแรกต่ำกว่า 12 kW จะตรึงที่ขั้นต่ำ แล้วคำนวณสัดส่วนใหม่ให้ตู้กลุ่มที่เหลือ'
   ui.chargerRows.innerHTML = '<tr><td colspan="8" class="empty-state">กดเริ่มจำลองเพื่อดูผลจากข้อมูลโหลด</td></tr>'
+  if (dayView?.ready) dayView.display()
 }
 function createLoadChart() {
   const guide = {
     id: 'timeGuide',
     afterDatasetsDraw(chart) {
+      const selected = dayView?.time
+      const index = selected ? chart.data.labels.indexOf(selected) : -1
       const point = chart.tooltip?.getActiveElements()?.[0]?.element
+      if (index >= 0) {
+        const x = chart.scales.x.getPixelForValue(index)
+        const { ctx, chartArea } = chart
+        ctx.save()
+        ctx.strokeStyle = '#155b52'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.moveTo(x, chartArea.top)
+        ctx.lineTo(x, chartArea.bottom)
+        ctx.stroke()
+        ctx.restore()
+      }
       if (!point) return
       const { ctx, chartArea } = chart
       ctx.save()
@@ -323,6 +368,10 @@ function createLoadChart() {
     ] },
     options: {
       maintainAspectRatio: false, normalized: true,
+      onClick(_event, points) {
+        const time = chartRows[points[0]?.index]?.time
+        if (time) dayView?.select(time)
+      },
       animation: reducedMotion ? false : { duration: 220, easing: 'easeOutQuart' },
       animations: {
         x: { from: context => appendOrigin && appendOrigin.index === context.dataIndex ? appendOrigin.points[context.datasetIndex]?.x : undefined },
@@ -369,3 +418,5 @@ function createLoadChart() {
   })
 }
 function formatNumber(value) { return Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: 2 }) }
+
+ui[matlabMode ? 'matlabModeLink' : 'gridModeLink'].setAttribute?.('aria-current', 'page')

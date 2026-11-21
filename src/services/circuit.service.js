@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { getSimulationState } from './simulation.service.js'
 
 const fail = (message, status = 400) => Object.assign(new Error(message), { status })
-export function createCircuitService({ readState = getSimulationState, bridgeFetch = fetch } = {}) {
+export function createCircuitService({ readState = getSimulationState, bridgeFetch = fetch, isBatchBusy = () => false } = {}) {
   const experiments = new Map()
   async function bridge(path, options = {}) {
     try {
@@ -57,6 +57,7 @@ export function createCircuitService({ readState = getSimulationState, bridgeFet
     return structuredClone(item)
   }
   async function run(id, body) {
+    if (isBatchBusy()) throw fail('ชุดอัตโนมัติกำลังใช้ MATLAB หรือรอตรวจงานเดิม พักชุดนั้นให้จบรอบก่อน',409)
     const item = get(id)
     if (!['ready','connection_error'].includes(item.status)) throw fail('รอบนี้ส่งงานแล้ว ดูผลเดิมหรือสร้างรอบใหม่จาก Dashboard',409)
     const voltage = Number(body.reference_voltage_V), soc = Number(body.initial_soc), duration = Number(body.duration_s)
@@ -78,4 +79,3 @@ export function createCircuitService({ readState = getSimulationState, bridgeFet
   }
   return { create, read, run, status }
 }
-export const circuitService = createCircuitService()

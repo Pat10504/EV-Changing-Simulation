@@ -8,9 +8,13 @@ import pageRouter from './routes/page.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { initSimulation } from './services/simulation.service.js';
 
+import { batchEvents } from './routes/circuit.routes.js';
+
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer);
+
+batchEvents.on('update', id => io.emit('circuit:updated', id));
 
 app.use(morgan('dev'));
 app.use(express.json());
