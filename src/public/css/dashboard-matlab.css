@@ -1,0 +1,50 @@
+[hidden] { display: none !important; }
+.mode-switch { display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:1rem }
+.mode-switch a { padding:.5rem .9rem; border-radius:6px; color:#215b59; text-decoration:none; border:1px solid #bdcfca }
+.mode-switch a[aria-current] { background:#164d48; color:white }
+.matlab-results { margin:1rem 0; padding:clamp(1rem,3vw,2rem); border:1px solid #cbdcd8; border-radius:14px; background:#f4f8f7 }
+.matlab-results p,.matlab-results details { font-size:.87rem; line-height:1.65; margin:.75rem 0 }
+.matlab-results a,.matlab-results summary { color:#185b52; cursor:pointer }
+.matlab-results .panel { padding:1rem; margin:.8rem 0 }
+.matlab-results .lab-chart-box { position:relative; height:230px }
+.matlab-results .auto-table-scroll { overflow:auto; max-height:360px }
+.matlab-results table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; font-size:.85rem; white-space:nowrap }
+.matlab-results th,.matlab-results td { text-align:left; padding:.65rem; border-bottom:1px solid #dbe5e1 }
+.matlab-results th { position:sticky; top:0; background:#eaf2ef }
+.matlab-results small { display:block; white-space:normal }
+.matlab-results tr[data-state="running"],.matlab-results tr[data-state="submitting"] { background:#e4efff }
+.matlab-results .auto-warning { color:#85401b }
+.matlab-results .auto-good { color:#176353 }
+.auto-history-list { display:grid; gap:.35rem; max-height:12rem; overflow:auto }
+.latest-measurement { color:#124c42; padding:.7rem 1rem; background:#e4f2ed; border-left:3px solid #218371 }
+.energy-dashboard .simulation-toolbar { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:14px 24px; align-items:center }
+.simulation-toolbar .mode-switch { margin:0 }
+.simulation-toolbar .toolbar-title { display:flex; align-items:center; justify-content:flex-end; gap:12px; border:0; padding:0 }
+.simulation-toolbar .controls,.simulation-toolbar #matlabSettings { display:flex; flex-wrap:wrap; gap:12px; grid-column:1/-1 }
+.simulation-toolbar .run-controls { grid-column:1/-1; max-width:none }
+.energy-dashboard .analysis-layout { grid-template-columns:minmax(0,3fr) minmax(220px,1fr); gap:14px }
+.day-inspector { color:#f3faf7; background:#194f49; border-radius:14px; padding:20px; min-width:0 }
+.day-inspector label,.day-inspector dt,.day-inspector p { font-size:.82rem; color:#d8ebe5 }
+.day-inspector select { display:block; margin:.5rem 0; width:100%; padding:.4rem; border-radius:6px; font:600 1.35rem system-ui }
+.inspect-actions { display:flex; flex-wrap:wrap; gap:5px }
+.day-inspector button { border:1px solid #66918c; background:#285e57; color:white; padding:.35rem .6rem; border-radius:5px; cursor:pointer }
+.day-inspector button:disabled { opacity:.5 }
+.day-inspector dl>div { display:flex; align-items:baseline; justify-content:space-between; gap:8px; padding:.48rem 0; border-bottom:1px solid #45716b }
+.day-inspector dd { margin:0; font-weight:700; font-variant-numeric:tabular-nums }
+.review-heading { display:flex; gap:12px; align-items:baseline; justify-content:space-between; flex-wrap:wrap; margin:18px 0 10px }
+.review-heading h2 { font-size:1.1rem; margin:0 }
+.review-heading details { font-size:.87rem; cursor:pointer }
+.energy-dashboard .allocation-summary { margin-bottom:14px }
+.energy-dashboard .allocation-values { display:flex; flex-wrap:wrap; gap:14px 30px }
+.energy-dashboard .allocation-values>div { display:grid; gap:4px }
+#loadChart { cursor:crosshair }
+@media(max-width:760px) {
+  .energy-dashboard .analysis-layout,.energy-dashboard .simulation-toolbar { grid-template-columns:minmax(0,1fr) }
+  .simulation-toolbar .toolbar-title { justify-content:flex-start }
+}
+.settings-fields { grid-column:1/-1; display:flex; flex-wrap:wrap; align-items:end; gap:12px 22px }
+.simulation-toolbar .settings-fields .controls { flex:0 1 auto }
+.day-inspector details { margin-top:.85rem; font-size:.8rem }
+.day-inspector summary { cursor:pointer }
+#slotRuns { display:grid; max-height:10rem; overflow:auto; gap:.4rem; margin-top:.45rem }
+#slotRuns a { color:#e0f5f0; line-height:1.6 }

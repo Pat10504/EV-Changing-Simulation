@@ -1,3 +1,5 @@
 node_modules/
 .env
 .DS_Store
+/runtime-data/
+/hardware/esp32_dashboard_lcd/secrets.h

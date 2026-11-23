@@ -238,7 +238,7 @@ button:disabled {
 }
 
 .metric-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .upload-grid {
@@ -279,8 +279,21 @@ label,
 .metric strong {
   display: block;
   margin-top: 12px;
-  font-size: clamp(24px, 3vw, 34px);
+  font-size: clamp(24px, 2.4vw, 32px);
   line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+#totalLoad,
+#controlledLoad,
+#baseLoad {
+  font-size: clamp(24px, 2.2vw, 30px);
+}
+
+.controlled-load-card {
+  border-color: #bfd8cb;
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbf7 100%);
 }
 
 .metric span:last-child {
@@ -326,6 +339,10 @@ label,
   gap: 6px;
 }
 
+.compact-field {
+  max-width: 130px;
+}
+
 input,
 select {
   width: 100%;
@@ -341,36 +358,6 @@ select {
 input:hover,
 select:hover {
   border-color: #b9c5bd;
-}
-
-.pwm-card {
-  display: grid;
-  gap: 14px;
-}
-
-.pwm-bar {
-  height: 16px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--panel-soft);
-  border: 1px solid var(--line);
-}
-
-.pwm-fill {
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, #82b39b, var(--accent));
-  transition: width 180ms ease;
-  position: relative;
-}
-
-.pwm-fill::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.24), transparent);
-  transform: translateX(-100%);
-  animation: signalSweep 2.6s ease-in-out infinite;
 }
 
 .signal-line {
@@ -434,6 +421,55 @@ tbody tr:hover {
 .uploader {
   display: grid;
   gap: 12px;
+}
+
+.template-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.template-link {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: white;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.csv-rules {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfa;
+}
+
+.csv-rules h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.csv-rules p,
+.csv-rules li {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.csv-rules p {
+  margin: 0 0 8px;
+}
+
+.csv-rules ul {
+  margin: 0;
+  padding-left: 18px;
 }
 
 .drop {
@@ -514,16 +550,6 @@ tbody tr:hover {
   color: var(--ok);
 }
 
-@keyframes signalSweep {
-  0% {
-    transform: translateX(-100%);
-  }
-  55%,
-  100% {
-    transform: translateX(100%);
-  }
-}
-
 .chart-box {
   height: 340px;
 }
@@ -549,11 +575,306 @@ tbody tr:hover {
   overflow: hidden;
 }
 
+.formula-hero {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+.formula-hero h2 {
+  margin: 6px 0 8px;
+  font-size: clamp(24px, 3vw, 38px);
+  line-height: 1.15;
+}
+
+.formula-hero p,
+.formula-card p {
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.formula-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.formula-tags span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: #fbfcfa;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.formula-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.formula-card {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.parameter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.parameter-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: #fbfcfa;
+}
+
+.parameter-name {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.parameter-card strong {
+  color: var(--accent);
+  font-size: 17px;
+}
+
+.parameter-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+  font-size: 13px;
+}
+
+.parameter-card code {
+  display: block;
+  overflow: auto;
+  border-radius: 8px;
+  padding: 10px;
+  background: #eef4f0;
+  color: #23352c;
+  font-size: 12px;
+}
+
+.formula-card h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.formula-card pre {
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8faf7;
+  color: #23352c;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.formula-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.formula-list div {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 10px;
+}
+
+.formula-list dt {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.formula-list dd {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.formula-flow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.flow-card {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding-top: 48px;
+}
+
+.flow-step {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: white;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.flow-card h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.flow-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.flow-card pre {
+  margin: 0;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8faf7;
+  color: #23352c;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.formula-triangle-card {
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfa;
+  padding: 18px;
+}
+
+.power-triangle-image {
+  display: block;
+  width: min(100%, 430px);
+  height: auto;
+  border-radius: 6px;
+  mix-blend-mode: multiply;
+}
+
+.worked-example {
+  margin-top: 16px;
+}
+
+.example-layout {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: 16px;
+}
+
+.example-inputs,
+.example-results {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  background: #fbfcfa;
+}
+
+.example-inputs h3,
+.example-results h3 {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+
+.example-inputs ul {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+}
+
+.example-inputs strong,
+.result-grid strong {
+  color: var(--text);
+}
+
+.result-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px 14px;
+  color: var(--muted);
+}
+
+.example-note {
+  margin: 14px 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.references-panel {
+  margin-top: 16px;
+}
+
+.references-panel h2 {
+  margin: 0 0 8px;
+}
+
+.references-panel p {
+  margin: 0 0 14px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.reference-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.reference-links a {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 9px 12px;
+  background: white;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+}
+
 @media (max-width: 900px) {
   .dashboard-grid,
   .upload-grid,
-  .metric-grid {
+  .metric-grid,
+  .parameter-grid,
+  .formula-flow,
+  .formula-grid,
+  .formula-hero,
+  .example-layout {
     grid-template-columns: 1fr;
+  }
+
+  .power-triangle-image {
+    max-width: 330px;
   }
 
   .topbar {
@@ -588,3 +909,114 @@ tbody tr:hover {
     white-space: normal;
   }
 }
+
+/* Energy allocation dashboard: review design, November 2026. */
+.energy-dashboard { --bg: #f3f5f8; --text: #182b3a; --muted: #617185; --line: #e0e6ed; --accent: #146b5e; --shadow: 0 3px 14px rgba(25,45,70,.025); }
+.energy-dashboard .shell { width: min(1440px, calc(100% - 64px)); padding-top: 28px; }
+.energy-dashboard .topbar { margin-bottom: 24px; gap: 20px; }
+.energy-dashboard .logo-frame { width: 74px; height: 66px; box-shadow: none; border: none; background: transparent; }
+.energy-dashboard .university-logo { width: 70px; filter: none; }
+.energy-dashboard .brand h1 { font-size: clamp(18px, 1.5vw, 25px); line-height: 1.6; }
+.energy-dashboard .project-kicker { font-weight: 600; font-size: 11px; }
+.energy-dashboard .brand p { font-size: 12px; }
+.energy-dashboard .panel { border-radius: 12px; padding: 22px; }
+.energy-dashboard h2 { font-size: 17px; line-height: 1.6; margin: 4px 0 0; }
+.eyebrow { display: block; font-size: 11px; font-weight: 700; letter-spacing: .02em; color: var(--muted); }
+.simulation-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 26px; }
+.toolbar-title { padding-right: 24px; border-right: 1px solid var(--line); }
+.clock { display: flex; align-items: baseline; gap: 12px; }
+.clock strong { font-size: 32px; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
+.clock span { font-size: 11px; color: var(--muted); }
+.simulation-toolbar .controls { margin: 0; gap: 12px; flex: 1; }
+.simulation-toolbar .field { width: 128px; }
+.simulation-toolbar label { font-size: 11px; }
+.simulation-toolbar input, .simulation-toolbar select { font-size: 13px; padding: 9px 10px; }
+.run-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 290px; }
+.run-controls button { font-size: 13px; padding: 9px 12px; }
+.connection-label { display: block; width: 100%; color: var(--muted); font-size: 10px; text-align: right; }
+.connection-label.connected { color: var(--accent); }
+.connection-label.disconnected { color: var(--danger); }
+.control-outcome { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 19px 23px; margin: 20px 0; border: 1px solid #ccded8; border-left: 4px solid #197565; border-radius: 10px; background: #eef7f3; }
+.control-outcome h2 { font-size: 18px; color: #176252; }
+.control-outcome p { margin: 5px 0 0; font-size: 13px; line-height: 1.7; color: #41665b; }
+.control-outcome.waiting { background: #edf2f7; border-color: #d9e1eb; border-left-color: #7c90a5; }
+.control-outcome.waiting h2, .control-outcome.waiting p { color: #41566c; }
+.control-outcome.limited { background: #fff3ed; border-color: #efd6c8; border-left-color: #c26130; }
+.control-outcome.limited h2, .control-outcome.limited p { color: #953f22; }
+.rule-chip { display: inline-flex; flex-shrink: 0; padding: 6px 11px; border: 1px solid var(--line); border-radius: 6px; background: rgba(255,255,255,.8); font-size: 11px; color: #536575; }
+.summary-metrics { gap: 16px; margin-bottom: 20px; }
+.energy-dashboard .metric { min-height: 169px; }
+.energy-dashboard .metric strong, .energy-dashboard #totalLoad, .energy-dashboard #controlledLoad, .energy-dashboard #baseLoad { font-size: clamp(21px, 2.15vw, 31px); letter-spacing: -.04em; margin: 14px 0 10px; }
+.energy-dashboard .metric .label { font-size: 12px; color: #4c5d71; }
+.energy-dashboard .metric > span:not(.label) { font-size: 11px; color: var(--muted); display: block; }
+.energy-dashboard .metric .status-pill { display: inline-flex !important; padding: 4px 8px; margin-top: 12px; min-width: auto; font-weight: 500; font-size: 10px !important; }
+.energy-dashboard .controlled-load-card { background: white; border-color: #a8cec3; }
+.energy-dashboard .controlled-load-card strong { color: #15695a; }
+.energy-dashboard .metric .metric-note { margin-top: 16px; color: #718091; font-size: 10px; }
+.status-pill.neutral { background: #edf1f5; color: #718091; }
+.load-meter, .power-meter { height: 5px; border-radius: 8px; background: #e5ede9; overflow: hidden; }
+.load-meter { margin-top: 17px; }
+.load-meter span, .power-meter span { height: 100%; display: block; width: 0; background: #288974; border-radius: inherit; transition: width .2s; }
+.load-meter span.overload { background: #c26130; }
+.analysis-layout { grid-template-columns: minmax(0, 2.2fr) minmax(280px, 1fr); gap: 20px; align-items: stretch; margin-bottom: 20px; }
+.chart-panel .section-heading { margin-bottom: 20px; align-items: flex-start; }
+.chart-caption { margin: 14px 0 0; color: var(--muted); font-size: 11px; line-height: 1.7; }
+.energy-dashboard .chart-box { height: 300px; }
+.allocation-values { margin: 22px 0 0; }
+.allocation-values > div { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 15px 0; border-bottom: 1px solid #edf0f3; }
+.allocation-values dt { font-size: 12px; color: var(--muted); }
+.allocation-values dd { margin: 0; font-size: 16px; font-weight: 650; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.allocation-values .allocation-total { margin-top: 10px; border-bottom: none; }
+.allocation-total dd { color: #176b5b; font-size: 22px; }
+.allocation-note { font-size: 11px; color: #68798a; line-height: 1.8; background: #f5f7f9; border-radius: 7px; padding: 12px; margin: 8px 0 0; }
+.table-intro, .table-footnote { color: var(--muted); font-size: 12px; line-height: 1.7; margin: 8px 0 18px; }
+.table-footnote { margin: 14px 0 0; font-size: 11px; }
+.allocation-table { min-width: 1000px; font-variant-numeric: tabular-nums; }
+.allocation-table th, .allocation-table td { padding: 17px 15px; font-size: 13px; }
+.allocation-table thead th { background: #f5f7fa; font-weight: 500; line-height: 1.7; }
+.allocation-table th small { font-size: 10px; font-weight: 400; color: var(--muted); }
+.allocation-table tbody th { background: none; position: static; font-weight: 650; color: var(--text); }
+.allocation-table .final-power { font-weight: 750; color: #156b5a; font-size: 21px; background: #f6faf8; }
+.allocation-table .below-floor { color: #ae5b25; }
+.allocation-tag { font-size: 11px; padding: 5px 8px; border-radius: 5px; background: #eef4f1; color: #3f6859; white-space: nowrap; }
+.allocation-tag.floor { background: #fff1dc; color: #875315; }
+.remaining-value { min-width: 95px; }
+.remaining-value .power-meter { margin-top: 7px; }
+.inactive-row { opacity: .6; }
+.muted { color: var(--muted); }
+.empty-state { text-align: center; padding: 40px !important; color: var(--muted); }
+.model-assumptions { margin: 22px 0; font-size: 12px; color: var(--muted); line-height: 1.8; }
+.model-assumptions summary { cursor: pointer; }
+.model-assumptions p { max-width: 1000px; }
+.model-assumptions a { color: var(--accent); text-decoration: underline; }
+.energy-dashboard .project-credits { margin: 24px 0 0; box-shadow: none; background: transparent; border: 0; border-top: 1px solid var(--line); border-radius: 0; padding: 16px 0; flex-wrap: wrap; white-space: normal; font-size: 10px; gap: 8px 20px; }
+.energy-dashboard .project-credits span { white-space: normal; }
+.dashboard-message { padding: 12px 16px; margin: 16px 0; background: #edf2f8; border-radius: 8px; font-size: 13px; }
+.dashboard-message.error { background: #fee4e2; color: var(--danger); }
+@media (max-width: 1200px) { .simulation-toolbar { gap: 18px; } .toolbar-title { padding-right: 18px; } .simulation-toolbar .field { width: 112px; } .run-controls { max-width: none; } .energy-dashboard .topbar { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 980px) { .analysis-layout { grid-template-columns: 1fr; } .energy-dashboard .metric-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .allocation-values { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 0 22px; } .control-outcome { align-items: flex-start; flex-direction: column; gap: 12px; } }
+@media (max-width: 600px) { .energy-dashboard .shell { width: calc(100% - 28px); padding-top: 18px; } .energy-dashboard .panel { padding: 16px; } .energy-dashboard .project-brand { gap: 10px; } .energy-dashboard .brand h1 { font-size: 17px; } .energy-dashboard .logo-frame { width: 48px; height: 48px; } .energy-dashboard .university-logo { width: 48px; } .energy-dashboard .nav { flex-wrap: wrap; } .energy-dashboard .nav a { font-size: 12px; padding: 8px 10px; } .simulation-toolbar { display: block; } .toolbar-title { border: 0; margin-bottom: 16px; } .simulation-toolbar .controls { display: grid; grid-template-columns: 1fr 1fr; } .simulation-toolbar .field { width: auto; } .run-controls { margin-top: 16px; } .connection-label { width: auto; margin-left: auto; } .energy-dashboard .metric strong, .energy-dashboard #totalLoad, .energy-dashboard #controlledLoad, .energy-dashboard #baseLoad { font-size: 22px; white-space: normal; } .energy-dashboard .metric { min-height: 157px; } .summary-metrics { gap: 10px; } .allocation-values { display: block; } .section-heading { flex-wrap: wrap; } .control-outcome { padding: 16px; } .energy-dashboard .chart-box { height: 260px; } }
+.energy-dashboard .metric .load-meter span { margin: 0; }
+.energy-dashboard .metric .status-pill.overload { color: var(--danger); }
+.energy-dashboard .metric .status-pill.warning { color: var(--warning); }
+
+/* Time navigation and chart readability. */
+.circuit-launch { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 20px; margin:16px 0; background:#eef5f3; border:1px solid #d9e8e2; border-radius:8px; font-size:12px; }
+.circuit-launch p { margin:6px 0 0; color:#6b7e81; font-size:11px; }
+.circuit-launch button { color:#23594d; background:white; border-color:#bfd8cd; white-space:nowrap; }
+@media(max-width:600px){.circuit-launch{align-items:flex-start;flex-direction:column}}
+.playback-state { display: inline-block; font-size: 10px; color: #62748a; padding: 3px 8px; border-radius: 4px; background: #eef2f7; margin-top: 4px; }
+.playback-state.playing { color: #08684a; background: #e2f4ec; }
+.time-navigation { display: flex; align-items: center; flex-wrap: wrap; gap: 16px 26px; padding: 15px 20px; margin: 12px 0 18px; border: 1px solid #dbe3ed; border-radius: 10px; background: #fff; }
+.time-picker, .time-shortcuts { display: flex; align-items: center; gap: 10px; }
+.time-picker label, .time-shortcuts > span { color: #596d82; font-size: 12px; white-space: nowrap; }
+.time-picker select { width: 110px; padding: 8px 12px; font-size: 14px; font-variant-numeric: tabular-nums; font-weight: 650; }
+.time-picker button { color: #185849; background: #eaf5ef; border-color: #c4ddd0; padding: 9px 16px; font-size: 12px; font-weight: 650; }
+.time-shortcuts button { font-variant-numeric: tabular-nums; padding: 6px 10px; font-size: 12px; background: #f6f8fc; }
+.time-help { font-size: 11px; color: #63768b; margin-left: auto; }
+.chart-range { font-size: 11px; color: #53677c; border: 1px solid #dfe6ef; padding: 6px 10px; border-radius: 6px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chart-hint { color: #738297; line-height: 1.7; font-size: 10px; margin: 7px 0 0; }
+.energy-dashboard .chart-box { height: 330px; }
+.energy-dashboard .chart-panel { background: #fff; }
+@media (max-width: 600px) { .time-navigation { padding: 14px; gap: 14px; } .time-help { margin: 0; width: 100%; line-height: 1.6; } .time-picker { flex-wrap: wrap; } .energy-dashboard .chart-box { height: 290px; } }
+@media (prefers-reduced-motion: reduce) { .energy-dashboard * { transition: none !important; } }

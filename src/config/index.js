@@ -7,6 +7,7 @@ export const config = {
   simulation: {
     transformerMva: Number(process.env.TRANSFORMER_MVA || 50),
     limitPercent: Number(process.env.LIMIT_PERCENT || 80),
+    powerFactor: Number(process.env.POWER_FACTOR || 0.9),
     defaultSpeedMs: Number(process.env.SIMULATION_INTERVAL_MS || 2000),
   },
 };

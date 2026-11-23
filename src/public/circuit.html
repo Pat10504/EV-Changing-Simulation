@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="th">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ทดลองวงจร | EV Charging Lab</title><link rel="stylesheet" href="/css/style.css"><link rel="stylesheet" href="/css/circuit.css"></head>
+<body class="energy-dashboard circuit-page">
+<main class="shell">
+  <header class="lab-header"><a href="/dashboard" class="lab-brand"><img src="/assets/spu-logo.svg" alt="มหาวิทยาลัยศรีปทุม"><span>EV CHARGING LAB<small>การทดลองวงจรจากเงื่อนไขโหลดจริง</small></span></a><nav class="nav"><a href="/dashboard">← Dashboard</a><a class="active" href="/circuit">ทดลองวงจร</a><a href="/formulas">สูตรคำนวณ</a></nav></header>
+  <div class="lab-intro"><div><span class="eyebrow">การทดลอง 01 · DCFastCharger</span><h1>หนึ่งช่วงเวลา หนึ่งตู้ชาร์จ</h1><p>นำกำลังที่ได้รับจัดสรรมาทดลอง แล้วเทียบกับแรงดัน กระแส และกำลังที่วงจรวัดได้</p></div><span id="connection" class="lab-connection" role="status">กำลังตรวจ MATLAB…</span></div>
+  <a class="lab-primary-link" href="/dashboard?mode=matlab">ทดลองหลายช่วงเวลาอัตโนมัติ →</a>
+  <div id="notice" class="lab-notice" role="alert" hidden></div>
+  <section id="empty" class="panel lab-empty" hidden><span class="eyebrow">เริ่มจากเงื่อนไขที่ต้องการศึกษา</span><h2>เลือกเวลาและตู้จาก Dashboard</h2><p>เช่น เลือก 18:35 → ดูช่วงนี้ → ทดลองตู้ 50 kW ใน MATLAB<br>หน้านี้จะแสดงเงื่อนไขที่ล็อกไว้ ก่อนส่งงานไปยังวงจร</p><a class="lab-primary-link" href="/dashboard">ไปเลือกเวลา →</a></section>
+  <div id="experiment" hidden>
+    <section class="snapshot-card" aria-label="เงื่อนไขจาก Dashboard"><div class="snapshot-time"><span>เวลาในข้อมูลโหลด</span><strong id="slot">—</strong><small>เงื่อนไขของรอบนี้ถูกล็อกไว้</small></div><div><span>ตู้ตัวแทน</span><strong>50 <small>kW</small></strong><small id="activeUnits">จำลองหนึ่งตู้</small></div><div><span>กำลังเป้าหมายต่อตู้</span><strong id="target">—</strong><small id="remaining">—</small></div><div class="snapshot-note"><b>เลือกเวลา → ตั้งค่ารอบทดลอง → วัดผล</b><p>ผลของรอบนี้คงอยู่กับเวลาที่เลือก แม้ Dashboard จะเดินต่อไปแล้ว</p></div></section>
+    <section class="lab-grid">
+      <aside class="panel lab-settings"><span class="eyebrow">01 / คำสั่งทดลอง</span><h2>จากกำลัง → กระแส</h2><p class="lab-muted">รอบแรกใช้กระแสคงที่ คำนวณจากแรงดันอ้างอิงที่คุณกำหนด</p>
+        <form id="runForm">
+          <label for="referenceVoltage">แรงดันอ้างอิงแบตเตอรี่ <span>V</span></label><input id="referenceVoltage" type="number" min="200" max="1000" step="any" value="400" required><small>ใช้แปลง kW → A ไม่ได้บังคับแรงดันแบตเตอรี่ในวงจรให้เท่าค่านี้</small>
+          <div class="lab-input-row"><div><label for="initialSoc">SOC เริ่มต้น <span>%</span></label><input id="initialSoc" type="number" min="5" max="95" step="1" value="20" required></div><div><label for="duration">เวลาวงจร <span>s</span></label><select id="duration"><option value="0.2">0.2 วินาที</option><option value="0.5">0.5 วินาที</option><option value="1">1 วินาที</option><option value="2">2 วินาที</option></select></div></div>
+          <div class="current-command"><span>กระแสที่จะส่งเข้า CurrentReference</span><strong id="currentTarget">—</strong><small id="currentFormula">—</small></div>
+          <button class="lab-run" id="runButton" type="submit" disabled>รัน MATLAB →</button><p class="lab-muted" id="runHelp">รับงานทีละรอบ · เริ่มจาก SOC ที่กำหนดใหม่ทุกครั้ง</p>
+        </form>
+        <div class="lab-scope"><b>ขอบเขตตัวอย่างนี้</b><p>กำลังเป้าหมายไม่เกิน 50 kW และกระแสคำสั่งไม่เกิน 125 A เป็นขอบเขตซอฟต์แวร์ทดลอง วงจรเดิมยังไม่มีตัวจำกัดกำลัง 50 kW และผลกำลังจริงอาจต่างจากเป้าหมาย</p><p>ใช้สมมติฐานกำลังไม่สูญเสียของ Dashboard ในการส่งเป้าหมาย ยังไม่ใช้ผลนี้แทนโหลด AC ของหม้อแปลง</p></div>
+      </aside>
+      <section class="lab-results" aria-label="ผลจากวงจร">
+        <div class="panel lab-result-header"><div><span class="eyebrow">02 / ผลจาก MATLAB</span><h2 id="resultTitle">พร้อมตรวจเงื่อนไข</h2><p id="resultDescription">เมื่อกดรัน จึงเริ่มจำลองวงจร ผลวัดจะแสดงที่นี่โดยไม่ใช้ข้อมูลสมมติ</p></div><span id="jobBadge" class="job-badge">ยังไม่รัน</span></div>
+        <div class="lab-metrics"><article class="panel"><span>กำลังเฉลี่ยช่วงท้าย</span><strong id="measuredPower">— <small>kW</small></strong><small id="powerError">รอผลจากวงจร</small></article><article class="panel"><span>แรงดันแบตเตอรี่เฉลี่ย</span><strong id="measuredVoltage">— <small>V</small></strong><small>วัดจาก Vbat</small></article><article class="panel"><span>กระแสชาร์จเฉลี่ย</span><strong id="measuredCurrent">— <small>A</small></strong><small>วัดจาก Ibat</small></article></div>
+        <article class="panel lab-chart"><div class="section-heading"><h2>กำลังเป้าหมายเทียบผลวงจร</h2><span id="chartNote">เวลาภายในวงจร · วินาที</span></div><div class="lab-chart-box"><canvas id="powerChart" role="img" aria-label="กราฟกำลังเป้าหมายและกำลังที่วัดจาก MATLAB"></canvas></div><p id="summaryNote" class="lab-muted">ยังไม่มีผลวัด · ค่าเฉลี่ยคำนวณจาก V(t) × I(t) ช่วงท้าย 20% ของรอบทดลอง</p></article>
+        <article class="panel lab-details"><div><span>แรงดัน DC bus เฉลี่ย</span><strong id="dcBus">— V</strong></div><div><span>เวลาที่ใช้คำนวณจริง</span><strong id="wallTime">— s</strong></div><div><span>รหัสรอบทดลอง</span><strong id="jobId">—</strong></div></article>
+        <details class="panel lab-measurements"><summary>ดูกราฟแรงดันและกระแส</summary><div class="lab-chart-box"><canvas id="voltageChart" role="img" aria-label="กราฟแรงดันแบตเตอรี่"></canvas></div><div class="lab-chart-box"><canvas id="currentChart" role="img" aria-label="กราฟกระแสชาร์จ"></canvas></div></details>
+      </section>
+    </section>
+    <footer class="lab-footer">เวลาโหลดบน Dashboard เป็นเงื่อนไขของการทดลอง ส่วนแกนเวลาในกราฟนี้คือวินาทีของวงจร ไม่ใช่การชาร์จสะสมต่อเนื่องทั้งวัน</footer>
+  </div>
+</main><script src="/vendor/chart.umd.js"></script><script src="/js/circuit.js"></script>
+</body></html>
