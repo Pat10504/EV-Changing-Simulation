@@ -7,6 +7,7 @@ const router = Router()
 router.get(['/', '/dashboard', '/dashboard.html'], dashboardPage)
 router.get(['/upload', '/upload.html'], uploadPage)
 router.get(['/formulas', '/formulas.html'], formulasPage)
+router.get('/thermal', (_req, res) => res.sendFile(paths.publicFile('thermal.html')))
 router.get(['/circuit', '/circuit.html'], (_req,res) => res.sendFile(paths.publicFile('circuit.html')))
 router.get(['/circuit/automatic', '/circuit-automatic.html'], (req, res) => {
   const query = new URLSearchParams({ mode: 'matlab' })

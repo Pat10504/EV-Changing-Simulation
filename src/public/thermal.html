@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>อุณหภูมิและอายุฉนวนหม้อแปลง | EV Charging Lab</title>
+  <link rel="stylesheet" href="/css/thermal.css">
+</head>
+<body>
+  <header><div class="mast">
+    <a href="/dashboard" class="brand"><img src="/assets/spu-logo.svg" alt="SPU"><span>EV Charging Lab<small>วิศวกรรมไฟฟ้า · มหาวิทยาลัยศรีปทุม</small></span></a>
+    <nav aria-label="หน้าหลัก"><a href="/dashboard">Dashboard</a><a href="/circuit">ทดลองวงจร</a><a href="/thermal" aria-current="page">อุณหภูมิหม้อแปลง</a></nav>
+  </div></header>
+  <main>
+    <div class="intro"><div><p class="model">DAIHEN <b>PP0827A01</b></p><h1>อุณหภูมิและอายุฉนวนหม้อแปลง</h1><p>ทดลองเปลี่ยนอากาศและภาระ เพื่อดูความร้อนในขดลวดและอายุฉนวนที่ใช้ไป</p></div></div>
+    <div class="modes" role="group" aria-label="เลือกสถานการณ์ทดลอง">
+      <button type="button" data-mode="A">A · อากาศกับอายุฉนวน</button>
+      <button type="button" data-mode="B" aria-pressed="true">B · ผลทดสอบโรงงาน</button>
+      <button type="button" data-mode="C">C · ภาระเกินชั่วคราว</button>
+      <button type="button" data-mode="D">D · เตือนและปลด (WTI)</button>
+    </div>
+    <section class="controls card">
+      <div class="scenario"><h2 id="title"></h2><p id="description"></p>
+        <button type="button" id="iecReference" class="reference-link" aria-haspopup="dialog" aria-controls="iecDialog" hidden>
+          <img src="/assets/iec-60076-7/icon_iec.webp" alt="">ตารางมาตรฐาน IEC 60076-7
+        </button>
+      </div>
+      <div class="inputs">
+        <label id="ambientField">อุณหภูมิอากาศ <span><output id="ambientOut" for="ambient"></output> °C</span><input id="ambient" type="range" min="15" max="45" step="0.1" value="38"></label>
+        <label id="initialField" hidden>ภาระเริ่มต้น<select id="initial"><option value="37.5">37.5 MVA · กรณีเดิม</option><option value="50">50 MVA · จาก FAT ใน B</option></select></label>
+        <label id="loadField">ภาระหลังเพิ่ม<select id="load"><option value="55">55 MVA</option><option value="60">60 MVA</option><option value="65" selected>65 MVA</option><option value="70">70 MVA</option></select></label>
+        <label id="stageField" hidden>พิกัดและการระบายความร้อน<select id="stage"><option value="0">30 MVA · ONAN</option><option value="1">40 MVA · ONAF1</option><option value="2" selected>50 MVA · ONAF2</option></select></label>
+        <label id="protectionField" hidden>รูปแบบทดลอง<select id="protection"><option value="off">คงภาระเดิม</option><option value="on">ลดเหลือ 50 MVA ที่ 105 °C</option></select></label>
+      </div>
+    </section>
+    <section class="card handoff" id="handoff" hidden>
+      <div><h2>จุดตั้งต้นจากผล FAT</h2><p id="handoffText"></p></div>
+      <button type="button" id="toC">ใช้กรณี 50 MVA ทดลองต่อใน C →</button>
+    </section>
+    <div class="layout">
+      <section class="plot card"><div class="heading"><h2 id="chartTitle"></h2><span id="chartMeta"></span></div><div class="canvas"><canvas id="plot" role="img" aria-labelledby="chartTitle"></canvas></div>
+        <div class="timeline" id="timeline"><label for="minute">อ่านผล ณ นาที</label><input type="range" id="minute" min="0" max="600" step="1" value="45"><output for="minute" id="minuteOut">45 / 600</output></div>
+      </section>
+      <aside class="result" id="fatResult" hidden>
+        <h2>อ่านค่าจากรายงาน FAT</h2>
+        <label for="fatSample">เวลาที่โรงงานบันทึก</label><select id="fatSample"></select>
+        <div class="reading"><strong id="fatRise"></strong><span>K</span></div><p>อุณหภูมิน้ำมันที่สูงกว่าอากาศ</p>
+        <dl><div><dt>น้ำมันด้านบน</dt><dd id="fatOil"></dd></div><div><dt>อากาศรอบหม้อแปลง</dt><dd id="fatAir"></dd></div></dl>
+        <p id="fatPhase"></p>
+      </aside>
+      <aside class="result" id="modelResult"><h2 id="resultTitle"></h2><p id="resultContext"></p>
+        <div class="dial" id="dial" hidden role="img"><div class="needle" id="needle"></div></div>
+        <div class="reading"><strong id="temperature"></strong><span>°C</span></div><p id="temperatureLabel">จุดร้อนขดลวด</p>
+        <dl><div><dt>น้ำมันส่วนบน</dt><dd id="oil"></dd></div><div><dt>อัตราเสื่อมสัมพัทธ์</dt><dd id="ageRate"></dd></div><div id="extraRow"><dt id="extraTitle"></dt><dd id="extraValue"></dd></div></dl>
+        <p id="signal" role="status" hidden></p>
+      </aside>
+    </div>
+    <section class="card detail" id="comparison" hidden>
+      <div class="heading"><h2>เปรียบเทียบผลของการเพิ่มโหลด</h2><span id="comparisonTime"></span></div>
+      <div class="scroll"><table><thead id="comparisonColumns"></thead><tbody id="comparisonRows"></tbody></table></div>
+    </section>
+    <section class="card detail"><div class="heading"><h2 id="tableTitle"></h2><span id="tableMeta"></span></div><div class="scroll"><table><thead id="columns"></thead><tbody id="rows"></tbody></table></div></section>
+    <details class="card assumptions"><summary>เงื่อนไขและค่าที่ใช้คำนวณ</summary><p>ใช้ข้อมูลทดสอบความร้อนของ Daihen PP0827A01 และวิธี IEC 60076-7 สมมติกระดาษฉนวนชนิดไม่ปรับปรุงทางความร้อน ที่จุดร้อน 98 °C อัตราเสื่อมเท่ากับ 1 ชั่วโมงเทียบเท่าต่อชั่วโมงเดินเครื่อง และเพิ่มเป็นสองเท่าทุก 6 °C</p><p>การทดลอง C และ D ใช้ ONAF2 โดย C เลือกเริ่มจากผล FAT ที่ 50 MVA หรือกรณีเดิมที่ 37.5 MVA ได้ ส่วน D เริ่มที่ 37.5 MVA ทั้งสองกรณีตั้งต้นที่สภาวะคงตัวของแบบจำลอง คำนวณทีละ 1 นาที นาน 10 ชั่วโมง ใช้ผลทดสอบ P₀ = 22.5 kW, Pₖ = 159.2 kW และอุณหภูมิน้ำมันเพิ่มที่พิกัด 45 K สมมติ H = 1.3, τ น้ำมัน = 182 นาที และ τ ขดลวด = 7 นาที</p><p>WTI ในหน้านี้ประมาณจากจุดร้อนขดลวด เกณฑ์เตือน 110 °C และเกณฑ์ปลด 120 °C เป็นค่าตั้งสาธิต ชั่วโมงเสื่อมเทียบเท่าใช้เปรียบเทียบการทดลอง อายุคงเหลือของเครื่องจริงต้องมีประวัติและสภาพฉนวนเพิ่มเติม</p></details>
+  </main>
+  <dialog id="iecDialog" class="reference-dialog" aria-labelledby="iecHeading">
+    <div class="reference-heading">
+      <h2 id="iecHeading">ตารางมาตรฐาน IEC 60076-7</h2>
+      <form method="dialog"><button type="submit" autofocus>ปิด</button></form>
+    </div>
+    <div class="reference-pages" tabindex="0" role="region" aria-label="ภาพเอกสารมาตรฐาน IEC 60076-7">
+      <img src="/assets/iec-60076-7/temp0.png" width="980" height="686" alt="ปก IEC 60076-7 ฉบับที่ 2 คู่มือการรับโหลดของหม้อแปลงชนิดแช่น้ำมัน">
+      <img src="/assets/iec-60076-7/temp1.png" width="988" height="433" alt="หัวข้อ 6.3 สมการอัตราการเสื่อมสัมพัทธ์ของฉนวนตามอุณหภูมิจุดร้อน">
+      <img src="/assets/iec-60076-7/temp2.png" width="987" height="705" alt="ตารางที่ 1 เปรียบเทียบอัตราการเสื่อมของกระดาษฉนวนสองชนิด ที่จุดร้อน 98 และ 104 °C กระดาษชนิดไม่ปรับปรุงทางความร้อนมีอัตราการเสื่อม 1 และ 2 เท่าตามลำดับ">
+    </div>
+  </dialog>
+  <script src="/vendor/chart.umd.js"></script><script type="module" src="/js/thermal.js"></script>
+</body></html>

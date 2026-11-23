@@ -136,3 +136,9 @@ experiments/python-matlab-engine/.venv/bin/python experiments/python-matlab-engi
 ไฟล์หลัก: `src/services/circuit-batch.service.js` จัดลำดับงานและสถานะ, `circuit-batch-store.js` เก็บผล, `src/public/dashboard.html` และ `src/public/js/dashboard-matlab.js` แสดงโหลดและผลวงจร ใช้ Python API และ `run_dashboard_experiment.m` เดิม สูตรจัดสรรและตัวควบคุมวงจรไม่ได้เปลี่ยนเป็น feedback power control ในขั้นนี้
 
 API: `POST/GET /api/circuit/batches`, `GET /api/circuit/batches/:id/dashboard` (ผลชุดและแถวโหลดปัจจุบัน), `GET /api/circuit/batches/:id`, `POST /api/circuit/batches/:id/action` (`start`, `pause`, `stop`), `GET /api/circuit/batches/:id/rows/:rowId`, `GET /api/circuit/batches/:id/export.csv`
+
+## ห้องทดลองอุณหภูมิหม้อแปลง
+
+เปิด **อุณหภูมิหม้อแปลง** จาก Dashboard หรือเข้า `/thermal` เลือกการทดลอง A (อากาศกับอายุฉนวน), B (ขั้นระบายความร้อน), C (ภาระเกินชั่วคราว) หรือ D (WTI และการลดภาระสาธิต) หน้าเว็บคำนวณจากเงื่อนไขของการทดลองในเบราว์เซอร์โดยตรง ใช้งานได้โดยเปิด Node server แม้ไม่ได้เชื่อม Supabase หรือ MATLAB
+
+C และ D เริ่มจาก 37.5 MVA คงตัวของขั้น ONAF2 แล้วเพิ่มเป็น 55–70 MVA คำนวณทีละนาทีเป็นเวลา 10 ชั่วโมง คลิกกราฟหรือเลื่อนเวลาเพื่ออ่านอุณหภูมิและชั่วโมงเสื่อมเทียบเท่าสะสม โหมด D มีกรณีสาธิตลดเหลือ 50 MVA เมื่อจุดร้อนถึง 105 °C เพื่อเปรียบเทียบกับคงภาระเดิม เกณฑ์ WTI 110/120 °C ใช้แสดงสถานะสมมติในห้องทดลองนี้
