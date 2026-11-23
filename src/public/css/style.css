@@ -1020,3 +1020,5 @@ tbody tr:hover {
 .energy-dashboard .chart-panel { background: #fff; }
 @media (max-width: 600px) { .time-navigation { padding: 14px; gap: 14px; } .time-help { margin: 0; width: 100%; line-height: 1.6; } .time-picker { flex-wrap: wrap; } .energy-dashboard .chart-box { height: 290px; } }
 @media (prefers-reduced-motion: reduce) { .energy-dashboard * { transition: none !important; } }
+
+.nav .logout { background: transparent; color: #305c54; border: 1px solid #c8d9d4; border-radius: 8px; padding: 8px 12px; font: inherit; cursor: pointer; }

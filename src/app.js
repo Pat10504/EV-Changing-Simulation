@@ -1,4 +1,5 @@
 import express from 'express';
+import { loginMiddleware } from './middleware/login.js';
 import morgan from 'morgan';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -16,9 +17,11 @@ const io = new Server(httpServer);
 
 batchEvents.on('update', id => io.emit('circuit:updated', id));
 
+if (process.env.RAILWAY_ENVIRONMENT) app.set('trust proxy', 1);
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(loginMiddleware(io));
 app.use(express.static(paths.publicDir));
 app.get('/vendor/chart.umd.js', (_req, res) => res.sendFile(paths.chartBundle));
 
