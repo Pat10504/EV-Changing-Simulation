@@ -56,12 +56,12 @@ for (const id of ['transformerMva', 'limitPercent', 'powerFactor', 'speed']) {
   })
 }
 socket.on('connect', () => {
-  ui.connectionState.textContent = '● เชื่อมต่อแล้ว'
+  ui.connectionState.textContent = 'เว็บเชื่อมต่อแล้ว'
   ui.connectionState.className = 'connection-label connected'
   return refreshState()
 })
 socket.on('disconnect', () => {
-  ui.connectionState.textContent = '● ขาดการเชื่อมต่อ'
+  ui.connectionState.textContent = 'เว็บขาดการเชื่อมต่อ'
   ui.connectionState.className = 'connection-label disconnected'
   if (!matlabMode) setRunning(false)
 })
@@ -170,7 +170,7 @@ async function sendSimulationCommand(url, body = {}) {
 function updateControlAvailability() {
   if (matlabMode) { matlabPlayback?.controls(); return }
   ui.openCircuitButton.disabled = commandPending || isSimulationRunning || Boolean(dayView?.pinned) || !circuitSnapshot?.charger_breakdown?.active_50kW?.active
-  ui.playButton.disabled = commandPending || availableTimes.length === 0
+  ui.playButton.disabled = commandPending || isSimulationRunning || availableTimes.length === 0
   ui.pauseButton.disabled = !isSimulationRunning || commandPending
   ui.resetButton.disabled = commandPending
   ui.seekButton.disabled = commandPending || availableTimes.length === 0
@@ -179,7 +179,7 @@ function updateControlAvailability() {
 }
 function setRunning(running) {
   isSimulationRunning = running
-  ui.playButton.textContent = running ? 'กำลังจำลอง' : 'เริ่ม / เล่นต่อ'
+  ui.playLabel.textContent = lastIndex >= 0 && !running ? 'เล่นต่อ' : 'เล่น'
   ui.playbackState.textContent = running ? 'กำลังเล่น' : 'พักอยู่'
   ui.playbackState.className = `playback-state${running ? ' playing' : ''}`
   updateControlAvailability()

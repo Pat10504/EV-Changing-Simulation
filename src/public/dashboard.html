@@ -17,7 +17,6 @@
         <span class="brand-copy">
           <span class="project-kicker">โครงงานวิศวกรรมไฟฟ้า | มหาวิทยาลัยศรีปทุม</span>
           <h1>ระบบจำลองการจัดการพลังงานสำหรับสถานีชาร์จ EV</h1>
-          <p>จำลองโหลดหม้อแปลงและการปรับลดกำลังชาร์จของตู้แต่ละประเภทแบบ Realtime</p>
         </span>
       </a>
       <nav class="nav">
@@ -32,35 +31,47 @@
 
 
     <section class="panel simulation-toolbar" aria-label="ตั้งค่าการจำลอง">
-      <nav class="mode-switch" aria-label="โหมดจำลอง"><a id="gridModeLink" href="/dashboard">ดูโหลดตามเวลา</a><a id="matlabModeLink" href="/dashboard?mode=matlab">จำลองพร้อม MATLAB</a></nav>
-      <div class="toolbar-title"><span class="eyebrow">การจำลองรายช่วงเวลา</span><div class="clock"><strong id="timeSlot">--:--</strong><span id="recordProgress">ยังไม่มีผลคำนวณ</span></div><span id="playbackState" class="playback-state">พร้อมเริ่ม</span></div>
+      <div class="console-heading">
+        <nav class="mode-switch" aria-label="โหมดจำลอง"><a id="gridModeLink" href="/dashboard">จัดสรรกำลังชาร์จ</a><a id="matlabModeLink" href="/dashboard?mode=matlab">ทดลองด้วย MATLAB</a></nav>
+        <span id="connectionState" class="connection-label" role="status">กำลังเชื่อมต่อเว็บ…</span>
+      </div>
+      <div class="console-workspace">
+        <div class="console-clock"><span>เวลาจำลอง</span><strong id="timeSlot">--:--</strong><div><span id="playbackState" class="playback-state">พร้อมเริ่ม</span><span id="recordProgress">ยังไม่มีผลคำนวณ</span></div></div>
       <div class="settings-fields">
       <div class="controls">
         <div class="field"><label for="transformerMva">หม้อแปลง (MVA)</label><input id="transformerMva" type="number" required min="1" step="1" value="50"></div>
         <div class="field"><label for="limitPercent">ขีดจำกัดโหลด (%)</label><input id="limitPercent" type="number" required min="1" max="100" value="80"></div>
         <div class="field"><label for="powerFactor">Power Factor</label><input id="powerFactor" type="number" required min="0.1" max="1" step="0.01" value="0.90"></div>
-        <div class="field" id="speedField"><label for="speed">แสดง 1 แถวทุก</label><select id="speed"><option value="2000">2 วินาที</option><option value="1000">1 วินาที</option><option value="400">0.4 วินาที</option></select></div>
+        <div class="field" id="speedField"><label for="speed">เปลี่ยนแถวทุก</label><select id="speed"><option value="2000">2 วินาที</option><option value="1000">1 วินาที</option><option value="400">0.4 วินาที</option></select></div>
       </div>
       <div id="matlabSettings" class="controls" hidden>
         <div class="field" id="matlabStartField"></div>
         <div class="field"><label for="endTime">ถึงเวลา (รวมแถวนี้)</label><select id="endTime"></select></div>
         <div class="field"><label for="referenceVoltage">แรงดันอ้างอิง (V)</label><input id="referenceVoltage" type="number" required min="200" max="1000" value="400"></div>
-        <div class="field"><label for="initialSoc">SOC เริ่มแต่ละรอบ (%)</label><input id="initialSoc" type="number" required min="5" max="95" value="20"></div>
-        <div class="field"><label for="duration">เวลาวงจรต่อแถว (s)</label><select id="duration"><option>0.2</option><option selected>0.5</option><option>1</option><option>2</option></select></div>
+        <div class="field"><label for="initialSoc">แบตเตอรี่เริ่มต้น (%)</label><input id="initialSoc" type="number" required min="5" max="95" value="20"></div>
+        <div class="field"><label for="duration">เวลาที่จำลองในวงจร (s)</label><select id="duration"><option>0.2</option><option selected>0.5</option><option>1</option><option>2</option></select></div>
       </div>
       </div>
-      <div class="run-controls">
-        <button id="playButton" class="primary">เริ่มจำลอง</button>
-        <button id="newBatchButton" type="button" class="primary" hidden>เลือกชุดใหม่</button>
-        <button id="pauseButton" disabled>พัก</button>
-        <button id="resetButton">รีเซ็ต</button>
-        <span id="connectionState" class="connection-label" role="status">กำลังเชื่อมต่อ…</span>
+      </div>
+      <div class="console-transport">
+        <div class="run-controls" role="group" aria-label="ควบคุมการจำลอง">
+          <button id="playButton" class="primary" type="button" title="เริ่มหรือเล่นต่อ"><svg class="icon-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 3.5v17l14-8.5z"/></svg><span id="playLabel">เล่น</span></button>
+          <button id="pauseButton" type="button" title="พักที่เวลาปัจจุบัน" disabled><svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 4h5v16H5zm9 0h5v16h-5z"/></svg><svg class="icon-stop" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/></svg><span id="pauseLabel">หยุด</span></button>
+          <button id="resetButton" type="button" title="รีเซ็ตการเล่น"><svg class="icon-reset" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 10a8 8 0 1 1 1 7M4 4v6h6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><svg class="icon-stop" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/></svg><span id="resetLabel">รีเซ็ต</span></button>
+          <button id="newBatchButton" type="button" title="เลือกช่วงเวลาสำหรับชุดใหม่" hidden><svg class="icon-reset" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 10a8 8 0 1 1 1 7M4 4v6h6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span>ตั้งชุดใหม่</span></button>
+        </div>
+        <div class="view-context"><strong id="viewContext">การจัดสรรกำลังชาร์จ</strong><span id="transportHint">หยุดเพื่ออ่านผล แล้วกดเล่นต่อจากแถวถัดไป</span></div>
+      </div>
+      <div id="engineBar" class="engine-bar" hidden>
+        <div><strong>คิว MATLAB</strong><span id="engineText" role="status">กำลังตรวจคิว…</span></div>
+        <a id="activeBatchLink" hidden>เปิดชุดที่ใช้ MATLAB →</a>
+        <button id="latestGraph" type="button" hidden>ดูกราฟล่าสุด</button>
       </div>
     </section>
 
     <section class="time-navigation" aria-label="เลือกเวลาจำลอง">
       <div class="time-picker" id="timePicker"><label id="timeLabel" for="startTime">เลือกเวลา</label><select id="startTime" disabled><option value="">กำลังโหลดเวลา…</option></select><button id="seekButton" disabled>ดูช่วงนี้</button></div>
-      <div class="time-shortcuts"><span>ไปยัง</span><button id="jump1230" disabled>12:30</button><button id="jump1835" disabled>18:35</button><button id="jump2055" disabled>20:55</button></div>
+      <div class="time-shortcuts"><span>เวลาตัวอย่าง</span><button id="jump1230" disabled>12:30</button><button id="jump1835" disabled>18:35</button><button id="jump2055" disabled>20:55</button></div>
       <span class="time-help" id="timeHelp">ดูช่วงนี้เพื่อพักอ่านผล แล้วกดเล่นต่อจากเวลานั้น</span>
     </section>
 

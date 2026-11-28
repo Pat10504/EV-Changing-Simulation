@@ -58,6 +58,7 @@ test('sequential worker pauses after a result, resumes next slot and stops witho
   const {service,requests,gates}=fixture(t)
   const batch=await service.create(inputs)
   service.action(batch.id,'start'); await until(()=>gates.length===1)
+  assert.deepEqual(service.activeBatch(), { id:batch.id, status:'running', time:'18:30', start:'18:30', end:'18:40' })
   assert.equal(requests.filter(r=>r.method==='POST').length,1)
   service.action(batch.id,'pause'); gates.shift()(); await until(service.idle)
   let saved=service.read(batch.id)

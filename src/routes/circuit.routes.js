@@ -13,6 +13,7 @@ const batches = createCircuitBatchService({ bridge, onChange: id => batchEvents.
 const service = createCircuitService({ bridge, isBatchBusy: () => batches.ownsEngine() })
 const router = Router()
 router.get('/status', async (_req,res) => res.json(await service.status()))
+router.get('/active-batch', (_req,res) => res.json({ batch: batches.activeBatch() }))
 router.get('/measurements', (req,res) => res.json(batches.measurementsAt(req.query.time)))
 router.get('/batches', (_req,res) => res.json(batches.list()))
 router.post('/batches', async (req,res) => res.status(201).json(await batches.create(req.body || {})))

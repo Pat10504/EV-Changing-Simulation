@@ -57,6 +57,12 @@ export function createCircuitBatchService({ store = createBatchStore(), readReco
   function ownsEngine() {
     return Boolean(worker) || [...batches.values()].some(b => b.rows.some(inFlight))
   }
+  function activeBatch() {
+    const batch = batches.get(worker) || [...batches.values()].find(b => b.rows.some(inFlight))
+    if (!batch) return null
+    const row = batch.rows.find(inFlight) || batch.rows[batch.current_index ?? 0]
+    return { id: batch.id, status: batch.status, time: row.time, start: batch.rows[0].time, end: batch.rows.at(-1).time }
+  }
   function dashboard(id) {
     const batch = get(id)
     // Older saved runs didn't record a cursor. Recover their last visited slot.
@@ -227,7 +233,7 @@ export function createCircuitBatchService({ store = createBatchStore(), readReco
       r.control_status,r.remaining_over_limit_kVA,batch.inputs.reference_voltage_V,batch.inputs.initial_soc,batch.inputs.duration_s,r.message])]
       .map(row => row.map(escape).join(',')).join('\r\n')
   }
-  return { dashboard, dayOverview, measurementsAt, create, action, result, csv, ownsEngine, read: id => view(get(id)),
+  return { activeBatch, dashboard, dayOverview, measurementsAt, create, action, result, csv, ownsEngine, read: id => view(get(id)),
     list: () => [...batches.values()].sort((a,b) => b.created_at.localeCompare(a.created_at)).slice(0,50)
       .map(b => ({ id:b.id,created_at:b.created_at,status:b.status,count:b.rows.length,start_time:b.rows[0]?.time,end_time:b.rows.at(-1)?.time,completed:b.rows.filter(r=>r.status==='complete').length })),
     idle: () => !worker }

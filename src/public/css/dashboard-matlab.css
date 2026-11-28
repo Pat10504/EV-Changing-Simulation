@@ -48,3 +48,60 @@
 .day-inspector summary { cursor:pointer }
 #slotRuns { display:grid; max-height:10rem; overflow:auto; gap:.4rem; margin-top:.45rem }
 #slotRuns a { color:#e0f5f0; line-height:1.6 }
+
+/* The clock, settings and transport share one console in both modes. */
+.energy-dashboard { --bg:#eef2f5; --text:#152d39; --accent:#086c66; }
+.energy-dashboard .shell { width:min(1480px, calc(100% - 48px)); padding-top:18px; }
+.energy-dashboard .topbar { align-items:center; margin-bottom:18px; }
+.energy-dashboard .project-header .logo-frame { width:54px; height:50px; }
+.energy-dashboard .project-header .university-logo { width:52px; }
+.energy-dashboard .project-header h1 { font-size:clamp(17px,1.45vw,23px); }
+.energy-dashboard .simulation-toolbar { display:block; padding:0; overflow:hidden; border:1px solid #b9c9d1; border-radius:14px; }
+.console-heading,.console-transport,.engine-bar { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px 20px; }
+.console-heading { background:#192f3c; color:white; }
+.console-heading .mode-switch { display:inline-flex; padding:3px; gap:2px; border-radius:9px; background:#0e222e; }
+.console-heading .mode-switch a { border:0; color:#c5d3da; padding:8px 14px; font-weight:600; }
+.console-heading .mode-switch a[aria-current] { background:#fff; color:#133c44; }
+.console-heading .connection-label { width:auto; color:#e6edf0; font-size:12px; }
+.connection-label::before { content:''; display:inline-block; width:8px; height:8px; background:#eab661; border-radius:50%; margin-right:7px; }
+.connected::before { background:#77d9bd; }
+.disconnected::before { background:#fa9b83; }
+.console-workspace { display:grid; grid-template-columns:minmax(175px,.8fr) minmax(0,4fr); }
+.console-clock { display:flex; flex-direction:column; justify-content:center; padding:17px 20px; background:#e5eff0; color:#123f48; }
+.console-clock>span,.console-clock div { font-size:12px; }
+.console-clock strong { font:650 clamp(30px,3vw,46px)/1.25 ui-monospace,monospace; letter-spacing:-.045em; }
+.console-clock div { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
+.console-clock .playback-state { margin:0; background:#fff; color:#284e58; }
+.console-clock .playing { background:#03665f; color:#fff; }
+.console-workspace .settings-fields { grid-column:auto; padding:16px 20px; gap:10px 20px; }
+.console-workspace .field { width:auto; min-width:112px; }
+.console-workspace .field label { font-size:12px; }
+.console-workspace .controls { align-items:flex-end; }
+.console-transport { justify-content:flex-start; flex-wrap:wrap; border-top:1px solid #dfe7ea; }
+.console-transport .run-controls { display:flex; flex-wrap:wrap; gap:6px; }
+.console-transport button { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; min-width:58px; min-height:50px; padding:5px 8px; border:1px solid #b6c9cd; background:white; border-radius:8px; color:#274852; font-size:12px; }
+.console-transport button.primary { background:#09675f; color:white; }
+.console-transport button:disabled { opacity:.45; }
+.console-transport svg { width:17px; height:17px; }
+#pauseButton .icon-pause,.energy-dashboard[data-mode="matlab"] #pauseButton .icon-stop,#resetButton .icon-stop,.energy-dashboard[data-mode="matlab"] #resetButton .icon-reset { display:none; }
+.energy-dashboard[data-mode="matlab"] #pauseButton .icon-pause,.energy-dashboard[data-mode="matlab"] #resetButton .icon-stop { display:block; }
+.view-context,.engine-bar>div { display:grid; gap:3px; }
+.view-context strong,.engine-bar strong { font-size:14px; }
+.view-context span,.engine-bar span { font-size:13px; color:#425965; }
+.engine-bar { background:#edf5f5; border-top:1px solid #c9dcdc; }
+.engine-bar>div { margin-right:auto; }
+.engine-bar a,.engine-bar button { color:#075d54; font-weight:650; font-size:13px; }
+.engine-bar button { background:white; border:1px solid #a9c9c1; border-radius:7px; padding:6px 12px; }
+.energy-dashboard .time-navigation { margin:12px 0 18px; }
+@media(max-width:900px) { .energy-dashboard .topbar { align-items:flex-start; } .console-workspace { grid-template-columns:minmax(150px,.8fr) minmax(0,3fr); } }
+@media(max-width:620px) {
+  .energy-dashboard .shell { width:calc(100% - 20px); padding-top:10px; }
+  .console-heading,.console-transport,.engine-bar { padding:10px 12px; flex-wrap:wrap; gap:9px; }
+  .console-workspace { display:block; }
+  .console-clock { flex-direction:row; align-items:center; justify-content:flex-start; gap:10px; padding:10px 12px; }
+  .console-workspace .settings-fields { display:grid; padding:12px; }
+  .console-workspace .settings-fields .controls { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .console-workspace .field { width:100%; min-width:0; }
+  .console-workspace .field input,.console-workspace .field select { width:100%; }
+  .console-heading .connection-label { margin:0; }
+}

@@ -24,17 +24,50 @@ function setupMatlabPlayback() {
       scales:{x:{title:{display:true,text:'เวลาโหลด'},...xOptions},y:{title:{display:true,text:'kW'}}},
       plugins:{legend:{position:'bottom'}}}})
   }
+  let owner = null, queueKnown = false, queueVersion = 0
+  async function refreshQueue() {
+    const version = ++queueVersion
+    try {
+      const result = await api('/active-batch')
+      if (version !== queueVersion) return
+      owner = result.batch
+      queueKnown = true
+    } catch {
+      if (version !== queueVersion) return
+      queueKnown = false
+    }
+    if (matlabMode) controls()
+  }
+  function describeQueue() {
+    el.activeBatchLink.hidden = !owner || owner.id === batchId || !queueKnown
+    if (!el.activeBatchLink.hidden) el.activeBatchLink.href = '/dashboard?mode=matlab&batch=' + encodeURIComponent(owner.id)
+    if (!queueKnown) return 'กำลังตรวจสอบว่าชุดใดใช้ MATLAB'
+    if (!owner) return 'ไม่มีชุดทดลองกำลังใช้ MATLAB'
+    const activity = { paused:'พักเพื่อตรวจงานเดิม', stopping:'กำลังหยุดหลังจบแถว', pausing:'กำลังพักหลังจบแถว' }[owner.status] || 'กำลังประมวลผล'
+    return `${activity} ${owner.time} · ชุด ${owner.start}–${owner.end} · ${owner.id.slice(0,8)}`
+  }
   function controls() {
     const state = batch?.status
+    const otherOwner = owner && owner.id !== batchId
+    el.engineText.textContent = describeQueue()
+    el.viewContext.textContent = batch ? `ชุดที่เปิด ${batch.rows[0].time}–${batch.rows.at(-1).time} · ${batch.id.slice(0,8)}` : 'ตั้งค่าชุดทดลองใหม่'
+    el.transportHint.textContent = otherOwner && queueKnown ? 'เปิดชุดที่ใช้ MATLAB เพื่อพักหรือหยุดชุดนั้น' :
+      state === 'pausing' ? 'รอผลแถวนี้แล้วพัก กดเล่นต่อได้' :
+      state === 'stopping' ? 'รอผลแถวนี้แล้วหยุด แถวที่ยังไม่เริ่มจะถูกยกเลิก' :
+      state === 'paused' ? 'กดเล่นต่อเพื่อทำงานที่ค้างไว้' :
+      ['complete','completed_with_errors','stopped'].includes(state) ? 'เปิดกราฟย้อนหลัง หรือกดชุดใหม่เพื่อเลือกเวลาอีกครั้ง' :
+      state === 'running' ? 'พักและหยุดมีผลหลังเก็บผลของแถวปัจจุบัน' : 'เลือกเวลาแล้วกดเล่น ระบบจะรอผล MATLAB ทีละแถว'
+    el.latestGraph.hidden = !batch?.rows.some(row => row.summary)
     el.newBatchButton.hidden = !matlabMode || !batchId
     el.newBatchButton.disabled = busy
     const locked = busy || Boolean(batchId)
     for (const id of ['startTime','endTime','referenceVoltage','initialSoc','duration','transformerMva','limitPercent','powerFactor']) el[id].disabled = locked
     for (const [id,time] of Object.entries(shortcuts)) el[id].disabled = locked || !availableTimes.includes(time)
-    el.playButton.disabled = busy || (batchId ? !['paused','ready'].includes(state) : !availableTimes.length)
-    el.playButton.textContent = state === 'paused' ? 'ทำต่อ' : 'เริ่มจำลองพร้อม MATLAB'
+    el.playButton.disabled = busy || !queueKnown || Boolean(otherOwner) || (batchId ? !['paused','ready'].includes(state) : !availableTimes.length)
+    el.playLabel.textContent = state === 'paused' ? 'เล่นต่อ' : 'เล่น'
+    el.playButton.title = state === 'paused' ? 'ทำชุดที่พักไว้ต่อ' : 'เริ่มชุดทดลอง MATLAB'
     el.pauseButton.disabled = busy || state !== 'running'
-    el.resetButton.disabled = busy || !['ready','paused','running','pausing'].includes(state)
+    el.resetButton.disabled = busy || Boolean(otherOwner) || !['ready','paused','running','pausing'].includes(state)
   }
   function selectEnd() {
     const index = availableTimes.indexOf(el.startTime.value)
@@ -196,6 +229,8 @@ function setupMatlabPlayback() {
   let gridStart = '', matlabStart = ''
   function showMode() {
     el.newBatchButton.hidden = !matlabMode || !batchId
+    document.body.dataset.mode = matlabMode ? 'matlab' : 'grid'
+    el.engineBar.hidden = !matlabMode
     for (const id of ['speedField','seekButton','manualLaunch','timePicker']) el[id].hidden = matlabMode
     for (const id of ['matlabSettings','matlabResults']) el[id].hidden = !matlabMode
     for (const [link, active] of [[el.gridModeLink,!matlabMode],[el.matlabModeLink,matlabMode]]) {
@@ -206,8 +241,11 @@ function setupMatlabPlayback() {
       el.matlabStartField.append(el.timeLabel, el.startTime)
       el.timeLabel.textContent = 'เริ่มเวลา'
       el.timeHelp.textContent = 'รันหนึ่งตู้ทุกแถวที่มีรถชาร์จ · แต่ละแถวห่างกัน 5 นาที'
-      el.pauseButton.textContent = 'พักหลังจบรอบ'
-      el.resetButton.textContent = 'หยุดชุดทดลอง'
+      el.pauseLabel.textContent = 'พัก'
+      el.pauseButton.title = 'พักหลังเก็บผลแถวปัจจุบัน แล้วเล่นต่อได้'
+      el.resetLabel.textContent = 'หยุด'
+      el.resetButton.title = 'จบชุดนี้หลังเก็บผลแถวปัจจุบัน'
+      refreshQueue()
       if (availableTimes.includes(matlabStart)) el.startTime.value = matlabStart
       if (availableTimes.length || batch) setTimes()
       else controls()
@@ -217,8 +255,13 @@ function setupMatlabPlayback() {
       el.timePicker.prepend(el.timeLabel, el.startTime)
       el.timeLabel.textContent = 'เลือกเวลา'
       el.timeHelp.textContent = 'ดูช่วงนี้เพื่อพักการเล่น ณ เวลาที่เลือก'
-      el.pauseButton.textContent = 'พัก'
-      el.resetButton.textContent = 'รีเซ็ต'
+      el.pauseLabel.textContent = 'หยุด'
+      el.pauseButton.title = 'หยุดที่แถวนี้ กดเล่นต่อจากแถวถัดไปได้'
+      el.resetLabel.textContent = 'รีเซ็ต'
+      el.resetButton.title = 'รีเซ็ตการเล่นและผลบนหน้าจอ'
+      el.playButton.title = 'เริ่มหรือเล่นต่อ'
+      el.viewContext.textContent = 'การจัดสรรกำลังชาร์จ'
+      el.transportHint.textContent = 'หยุดเพื่ออ่านผล แล้วกดเล่นต่อจากแถวถัดไป'
       for (const key of Object.keys(STORAGE_KEYS)) {
         el[key].disabled = false
         el[key].value = localStorage.getItem(STORAGE_KEYS[key]) || el[key].defaultValue
@@ -254,8 +297,21 @@ function setupMatlabPlayback() {
   el.history.parentElement.addEventListener('toggle',event=>{
     if (event.target.open) loadHistory().catch(error=>showMessage(error.message))
   })
-  socket.on('circuit:updated', id => { if (matlabMode && id === batchId) refresh() })
-  socket.on('connect', () => { if (matlabMode) refresh() })
+  el.latestGraph.addEventListener('click', () => {
+    const latest = batch?.rows.findLast(row => row.summary)
+    if (latest) showDetail(latest.id)
+  })
+  socket.on('circuit:updated', id => {
+    if (!matlabMode) return
+    refreshQueue()
+    if (id === batchId) refresh()
+  })
+  socket.on('connect', () => { if (matlabMode) { refreshQueue(); refresh() } })
+  socket.on('disconnect', () => {
+    queueVersion++
+    queueKnown = false
+    if (matlabMode) controls()
+  })
   function rowAt(time) { return batch?.rows.find(row => row.time === time) }
   return { start, action, controls, setTimes, selectEnd, showMode, rowAt, get id() { return batchId },
     openDetail(time) { const row = rowAt(time); if (row?.summary) showDetail(row.id) } }
