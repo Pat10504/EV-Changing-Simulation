@@ -1,20 +1,10 @@
+import { localCircuitBridge } from './circuit-bridge.js'
 import { randomUUID } from 'node:crypto'
 import { getSimulationState } from './simulation.service.js'
 
 const fail = (message, status = 400) => Object.assign(new Error(message), { status })
-export function createCircuitService({ readState = getSimulationState, bridgeFetch = fetch, isBatchBusy = () => false } = {}) {
+export function createCircuitService({ readState = getSimulationState, bridgeFetch, bridge = localCircuitBridge(bridgeFetch), isBatchBusy = () => false } = {}) {
   const experiments = new Map()
-  async function bridge(path, options = {}) {
-    try {
-      const response = await bridgeFetch(`http://127.0.0.1:5050/api/circuit${path}`, { ...options, signal: AbortSignal.timeout(5000) })
-      const body = await response.json()
-      if (!response.ok) throw fail(body.message || 'Python ไม่สามารถรับงานได้', response.status)
-      return body
-    } catch (error) {
-      if (error.status) throw error
-      throw fail('ยังติดต่อ Python ไม่ได้ เปิด web_app.py ที่พอร์ต 5050 แล้วลองอีกครั้ง', 503)
-    }
-  }
   function get(id) {
     const item = experiments.get(id)
     if (!item) throw fail('ไม่พบรอบทดลองนี้ เซิร์ฟเวอร์อาจเริ่มใหม่ กรุณาเลือกเวลาจาก Dashboard อีกครั้ง', 404)

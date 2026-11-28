@@ -1,3 +1,4 @@
+import { localCircuitBridge } from './circuit-bridge.js'
 import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
 import { getChargers, getLoadPatterns } from './db.service.js'
@@ -12,12 +13,12 @@ const validTime = value => typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\
 const minutes = value => Number(value.slice(0, 2)) * 60 + Number(value.slice(3))
 
 export function createCircuitBatchService({ store = createBatchStore(), readRecords = getLoadPatterns,
-  readChargers = getChargers, onChange = () => {}, bridgeFetch = fetch,
+  readChargers = getChargers, onChange = () => {}, bridgeFetch, bridge = localCircuitBridge(bridgeFetch),
   wait = () => delay(1500), maxWaitMs = 600000 } = {}) {
   const batches = new Map()
   let worker = null
   // Never silently replay a job after a server restart. Resume reconciles its old UUID first.
-  for (const batch of store.list()) {
+  function restore(batch) {
     if (['running', 'pausing', 'stopping'].includes(batch.status)) {
       batch.stop_requested = batch.status === 'stopping'
       batch.status = 'paused'
@@ -26,8 +27,13 @@ export function createCircuitBatchService({ store = createBatchStore(), readReco
     }
     batches.set(batch.id, batch)
   }
+  for (const batch of store.list()) restore(batch)
   function save(batch) { batch.updated_at = clock(); store.write(batch); onChange(batch.id) }
   function get(id) {
+    if (!batches.has(id)) {
+      const saved = store.read(id)
+      if (saved) restore(saved)
+    }
     const batch = batches.get(id)
     if (!batch) throw fail('ไม่พบชุดทดลองนี้', 404)
     return batch
@@ -47,14 +53,6 @@ export function createCircuitBatchService({ store = createBatchStore(), readReco
       source = records.length > batch.rows.length ? 'mixed' : 'saved_slots'
     }
     return { source, frames: records.map(row => calculate(row, { ...batch.config, chargers: batch.chargers })) }
-  }
-  async function bridge(path, options = {}) {
-    try {
-      const response = await bridgeFetch(`http://127.0.0.1:5050/api/circuit${path}`, { ...options, signal: AbortSignal.timeout(5000) })
-      const body = await response.json()
-      if (!response.ok) throw fail(body.message || 'Python รับงานไม่สำเร็จ', response.status)
-      return body
-    } catch (e) { if (e.status) throw e; throw fail('ติดต่อ Python ไม่ได้ พักชุดทดลองไว้แล้ว เปิด Python แล้วกดทำต่อ', 503) }
   }
   function ownsEngine() {
     return Boolean(worker) || [...batches.values()].some(b => b.rows.some(inFlight))

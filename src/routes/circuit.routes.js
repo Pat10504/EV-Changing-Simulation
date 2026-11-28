@@ -1,12 +1,16 @@
+import { createWorkerBridge } from '../services/circuit-bridge.js'
 import { EventEmitter } from 'node:events'
 import { Router } from 'express'
 import { createCircuitService } from '../services/circuit.service.js'
 import { createCircuitBatchService } from '../services/circuit-batch.service.js'
 // Construct runtime services only in the application, never as an import side effect
 // of the factories used by tests or inspection scripts.
+const token = process.env.MATLAB_WORKER_TOKEN
+export const workerBridge = token || process.env.RAILWAY_ENVIRONMENT ? createWorkerBridge(token) : null
+const bridge = workerBridge?.request
 export const batchEvents = new EventEmitter()
-const batches = createCircuitBatchService({ onChange: id => batchEvents.emit('update', id) })
-const service = createCircuitService({ isBatchBusy: () => batches.ownsEngine() })
+const batches = createCircuitBatchService({ bridge, onChange: id => batchEvents.emit('update', id) })
+const service = createCircuitService({ bridge, isBatchBusy: () => batches.ownsEngine() })
 const router = Router()
 router.get('/status', async (_req,res) => res.json(await service.status()))
 router.get('/measurements', (req,res) => res.json(batches.measurementsAt(req.query.time)))

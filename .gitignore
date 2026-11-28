@@ -3,3 +3,4 @@ node_modules/
 .DS_Store
 /runtime-data/
 /hardware/esp32_dashboard_lcd/secrets.h
+worker-config.json

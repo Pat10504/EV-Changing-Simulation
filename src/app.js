@@ -9,11 +9,12 @@ import pageRouter from './routes/page.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { initSimulation } from './services/simulation.service.js';
 
-import { batchEvents } from './routes/circuit.routes.js';
+import { batchEvents, workerBridge } from './routes/circuit.routes.js';
 
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer);
+workerBridge?.attach(io);
 
 batchEvents.on('update', id => io.emit('circuit:updated', id));
 
